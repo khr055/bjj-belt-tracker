@@ -12,6 +12,14 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - See a timeline of promotions and the time spent at each belt and stripe.
 - Log training sessions (date, duration, gi or no-gi), and edit or delete them.
 - See sessions and hours since your last promotion, and all time.
+- Install it to your phone's home screen and use it with no signal.
+
+## Offline and updates
+
+The production build ships a service worker that caches the whole app, so after the first
+visit it opens without a connection. A new deploy downloads in the background and appears the
+next time the app is opened. The service worker is not used by `npm run dev`; to try it locally,
+run `npm run build` and then `npm run preview`.
 
 ## Development
 
@@ -28,6 +36,8 @@ npm run dev
 | `npm test`          | Run the test suite                    |
 | `npm run typecheck` | Type-check without building           |
 | `npm run build`     | Type-check and build into `dist/`     |
+| `npm run preview`   | Serve the built app from `dist/`      |
+| `npm run icons`     | Regenerate the app icons in `public/` |
 
 ## Layout
 
@@ -35,3 +45,5 @@ npm run dev
   functions with their tests.
 - `src/state/` loads and saves the data.
 - `src/components/` holds the React UI.
+- `pwa/` holds the service worker and the build step that generates its file list.
+- `public/` holds the web app manifest and icons.
