@@ -19,6 +19,8 @@ export interface AppActions {
   addSession(input: SessionInput, today: string): string | null;
   updateSession(id: string, input: SessionInput, today: string): string | null;
   deleteSession(id: string): void;
+  /** Swaps in a whole data set, e.g. from a backup file. */
+  replaceData(data: AppData): void;
 }
 
 export function useAppState(): { data: AppData; saveFailed: boolean; actions: AppActions } {
@@ -44,6 +46,7 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
     addSession: (input, today) => apply(addSession(data, input, today)),
     updateSession: (id, input, today) => apply(updateSession(data, id, input, today)),
     deleteSession: (id) => commit(deleteSession(data, id)),
+    replaceData: commit,
   };
 
   return { data, saveFailed, actions };

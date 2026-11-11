@@ -13,6 +13,14 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Log training sessions (date, duration, gi or no-gi), and edit or delete them.
 - See sessions and hours since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
+- Save a backup file and restore from one, to protect your history or move it to a new device.
+
+## Backups
+
+The Backup tab saves everything to a `.json` file (download, or the share sheet on phones).
+Restoring shows what the file contains and what it will replace before anything changes, and
+replaces the data on the device; it does not merge. Files that are not backups, come from a
+newer version of the app, or contain an out-of-order promotion history are refused.
 
 ## Offline and updates
 

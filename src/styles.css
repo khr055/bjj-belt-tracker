@@ -81,7 +81,7 @@ h2 {
 /* Tabs */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 4px;
   background: var(--surface);
@@ -96,6 +96,7 @@ h2 {
   background: transparent;
   color: var(--muted);
   font: inherit;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -376,6 +377,29 @@ input:focus-visible {
 .button--danger {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type='file'] {
+  max-width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+/* A change that needs a second, deliberate tap */
+.confirm {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow-wrap: anywhere;
 }
 
 /* Lists */

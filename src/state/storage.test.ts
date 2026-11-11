@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, type AppData } from '../domain/types';
-import { loadData, parseData, saveData, STORAGE_KEY } from './storage';
+import { parseData, parseDataWithReport } from '../domain/parse';
+import { loadData, loadLastBackup, saveData, saveLastBackup, STORAGE_KEY } from './storage';
 
 describe('storage', () => {
   it('round-trips app data through localStorage', () => {
@@ -36,5 +37,24 @@ describe('storage', () => {
     expect(parsed.sessions.map((s) => s.id)).toEqual(['ok']);
     // An invalid stored rank falls back to the highest logged promotion.
     expect(parsed.rank).toEqual({ belt: 'purple', stripes: 1 });
+  });
+
+  it('counts malformed and duplicate records as skipped', () => {
+    const report = parseDataWithReport({
+      rank: null,
+      promotions: [
+        { id: 'p', belt: 'blue', stripes: 0, date: '2024-01-01' },
+        { id: 'p', belt: 'blue', stripes: 1, date: '2024-06-01' },
+      ],
+      sessions: [{ id: 's', date: 'soon', durationMinutes: 60, type: 'gi' }],
+    });
+    expect(report.data.promotions).toHaveLength(1);
+    expect(report.skipped).toBe(2);
+  });
+
+  it('remembers the last backup date', () => {
+    expect(loadLastBackup()).toBeNull();
+    saveLastBackup('2026-11-11');
+    expect(loadLastBackup()).toBe('2026-11-11');
   });
 });

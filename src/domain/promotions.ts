@@ -48,6 +48,17 @@ export function validatePromotion(
   return null;
 }
 
+/** Checks a whole history, e.g. from a backup file. Returns the first problem, or null. */
+export function findHistoryConflict(promotions: Promotion[], today: string): string | null {
+  const accepted: Promotion[] = [];
+  for (const promotion of sortPromotions(promotions)) {
+    const error = validatePromotion(promotion, accepted, today);
+    if (error) return error;
+    accepted.push(promotion);
+  }
+  return null;
+}
+
 function clean(input: PromotionInput): PromotionInput {
   const promotedBy = input.promotedBy?.trim();
   const academy = input.academy?.trim();

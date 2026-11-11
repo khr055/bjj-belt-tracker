@@ -1,9 +1,18 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { createBackupText, readBackup } from './domain/backup';
 import type { AppData } from './domain/types';
+import { downloadTextFile } from './state/files';
 import { STORAGE_KEY } from './state/storage';
+
+// jsdom has no downloads or share sheet; capture what would have been saved instead.
+vi.mock('./state/files', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./state/files')>()),
+  downloadTextFile: vi.fn(),
+  canShareFiles: () => false,
+}));
 
 function seed(data: AppData) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -132,5 +141,99 @@ describe('App', () => {
     );
     expect(screen.getByText('No sessions logged yet.')).toBeInTheDocument();
     expect(stored().sessions).toEqual([]);
+  });
+});
+
+describe('Backup and restore', () => {
+  const HISTORY: AppData = {
+    rank: { belt: 'blue', stripes: 1 },
+    promotions: [
+      { id: 'p1', belt: 'blue', stripes: 0, date: '2024-06-01' },
+      { id: 'p2', belt: 'blue', stripes: 1, date: '2025-02-01' },
+    ],
+    sessions: [{ id: 's1', date: '2025-03-01', durationMinutes: 90, type: 'gi' }],
+  };
+
+  function backupFile(data: AppData, name = 'backup.json'): File {
+    return new File([createBackupText(data)], name, { type: 'application/json' });
+  }
+
+  it('downloads a backup that restores to the same data', async () => {
+    seed(HISTORY);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    expect(screen.getByText('No backup has been made from this device yet.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download backup' }));
+
+    const [name, text] = vi.mocked(downloadTextFile).mock.calls.at(-1)!;
+    expect(name).toMatch(/^bjj-belt-tracker-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    const restored = readBackup(text, '2026-11-11');
+    expect(restored.ok && restored.value.data).toEqual(HISTORY);
+    expect(screen.getByText(/^Last backup from this device: /)).toBeInTheDocument();
+  });
+
+  it('has nothing to download before any data exists', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+    expect(screen.getByRole('button', { name: 'Download backup' })).toBeDisabled();
+  });
+
+  it('shows what a backup contains and only replaces data once confirmed', async () => {
+    const existing: AppData = {
+      rank: { belt: 'white', stripes: 2 },
+      promotions: [],
+      sessions: [{ id: 'old', date: '2023-01-01', durationMinutes: 60, type: 'gi' }],
+    };
+    seed(existing);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session');
+    expect(confirm).toHaveTextContent(
+      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session.',
+    );
+    expect(stored()).toEqual(existing);
+
+    await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
+    expect(stored()).toEqual(HISTORY);
+    expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions and 1 session.');
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByRole('heading', { name: 'Blue belt, 1 stripe' })).toBeInTheDocument();
+  });
+
+  it('keeps the current data when the restore is cancelled', async () => {
+    seed(HISTORY);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    const empty: AppData = { rank: null, promotions: [], sessions: [] };
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(empty));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('group', { name: 'Confirm restore' })).not.toBeInTheDocument();
+    expect(stored()).toEqual(HISTORY);
+  });
+
+  it('refuses a file that is not a backup', async () => {
+    seed(HISTORY);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    const notABackup = new File(['{"hello":"world"}'], 'notes.json', { type: 'application/json' });
+    await user.upload(screen.getByLabelText('Backup file'), notABackup);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("That file isn't a Belt Tracker backup.");
+    expect(screen.queryByRole('group', { name: 'Confirm restore' })).not.toBeInTheDocument();
+    expect(stored()).toEqual(HISTORY);
   });
 });

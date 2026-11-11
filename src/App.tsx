@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BackupView } from './components/BackupView';
 import { MatTimeStats } from './components/MatTimeStats';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'training', label: 'Training' },
+  { id: 'backup', label: 'Backup' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -100,6 +102,10 @@ export default function App() {
               />
             </section>
           </>
+        )}
+
+        {tab === 'backup' && (
+          <BackupView data={data} today={today} onRestore={actions.replaceData} />
         )}
       </main>
     </div>
