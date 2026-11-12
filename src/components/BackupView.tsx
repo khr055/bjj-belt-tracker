@@ -6,6 +6,7 @@ import {
   type BackupContents,
 } from '../domain/backup';
 import { formatDate } from '../domain/dates';
+import { describeAdded, mergeData, totalAdded } from '../domain/merge';
 import { formatRank } from '../domain/rank';
 import type { AppData } from '../domain/types';
 import { canShareFiles, downloadTextFile, readFileText, shareTextFile } from '../state/files';
@@ -94,6 +95,17 @@ export function BackupView({ data, today, onRestore }: Props) {
     input.value = '';
   };
 
+  // What adding the file to this device would do, worked out before anything is offered.
+  const merge = pending && !nothingToBackUp ? mergeData(data, pending.contents.data, today) : null;
+
+  const add = () => {
+    if (!merge?.ok) return;
+    onRestore(merge.value.data);
+    // The device now holds more than the file does, so this is not a backup of it.
+    setPending(null);
+    setStatus(`Added ${describeAdded(merge.value.added)}.`);
+  };
+
   const restore = () => {
     if (!pending) return;
     const restored = pending.contents.data;
@@ -149,7 +161,7 @@ export function BackupView({ data, today, onRestore }: Props) {
         <h2 id="restore-heading">Restore</h2>
         <p className="muted">
           Choose a backup file to load it onto this device. You will see what it contains before
-          anything changes.
+          anything changes, and can add it to what is here or replace what is here with it.
         </p>
         <div className="field">
           <label htmlFor={fileInputId}>Backup file</label>
@@ -182,19 +194,53 @@ export function BackupView({ data, today, onRestore }: Props) {
                 be left out.
               </p>
             )}
-            <p className={nothingToBackUp ? 'muted' : 'error'}>
-              {nothingToBackUp
-                ? 'This device has no data yet, so nothing will be overwritten.'
-                : `Restoring replaces everything on this device now: ${describe(data)}.`}
-            </p>
+            {nothingToBackUp && (
+              <p className="muted">This device has no data yet, so nothing will be overwritten.</p>
+            )}
+            {merge?.ok && totalAdded(merge.value.added) > 0 && (
+              <p>
+                <strong>Add to this device</strong> keeps everything here and adds what is
+                missing: {describeAdded(merge.value.added)}.
+                {merge.value.alreadyHere > 0 &&
+                  ` ${count(merge.value.alreadyHere, 'record')} already here ${
+                    merge.value.alreadyHere === 1 ? 'stays' : 'stay'
+                  } as this device has ${merge.value.alreadyHere === 1 ? 'it' : 'them'}.`}
+              </p>
+            )}
+            {merge?.ok && totalAdded(merge.value.added) === 0 && (
+              <p className="muted">
+                Everything in this backup is already on this device, so there is nothing to add.
+              </p>
+            )}
+            {merge && !merge.ok && (
+              <p className="notice">This backup can't be added to this device. {merge.error}</p>
+            )}
+            {!nothingToBackUp && (
+              <p className="error">
+                <strong>Replace everything</strong> removes what is on this device now:{' '}
+                {describe(data)}.
+              </p>
+            )}
             <div className="actions">
+              {merge?.ok && totalAdded(merge.value.added) > 0 && (
+                <button type="button" className="button button--primary" onClick={add}>
+                  Add to this device
+                </button>
+              )}
               <button type="button" className="button button--danger" onClick={restore}>
-                Restore this backup
+                {nothingToBackUp ? 'Restore this backup' : 'Replace everything'}
               </button>
               <button type="button" className="button" onClick={() => setPending(null)}>
                 Cancel
               </button>
             </div>
+            {merge?.ok && totalAdded(merge.value.added) > 0 && (
+              <p className="hint">
+                Adding never removes or changes anything here. A record you changed on the other
+                device keeps this device's version, and one you deleted here comes back if the
+                backup still has it.
+              </p>
+            )}
           </div>
         )}
 

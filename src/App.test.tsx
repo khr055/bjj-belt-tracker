@@ -1800,11 +1800,11 @@ describe('Backup and restore', () => {
     const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
     expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session · 1 competition · 1 technique');
     expect(confirm).toHaveTextContent(
-      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session · 0 competitions · 0 techniques.',
+      'Replace everything removes what is on this device now: White belt, 2 stripes · 0 promotions · 1 session · 0 competitions · 0 techniques.',
     );
     expect(stored()).toEqual(existing);
 
-    await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
+    await user.click(within(confirm).getByRole('button', { name: 'Replace everything' }));
     expect(stored()).toEqual(HISTORY);
     expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions, 1 session, 1 competition and 1 technique.');
     // The data now matches a file saved today, so it counts as backed up today.
@@ -1812,6 +1812,79 @@ describe('Backup and restore', () => {
 
     await user.click(screen.getByRole('button', { name: 'Overview' }));
     expect(screen.getByRole('heading', { name: 'Blue belt, 1 stripe' })).toBeInTheDocument();
+  });
+
+  it('adds a backup to what is on the device without removing anything', async () => {
+    const existing: AppData = {
+      ...emptyData(),
+      rank: { belt: 'blue', stripes: 1 },
+      sessions: [
+        { id: 's1', date: '2025-03-01', durationMinutes: 90, type: 'gi', notes: 'Changed on this device' },
+        { id: 'only-here', date: '2025-05-01', durationMinutes: 60, type: 'nogi' },
+      ],
+    };
+    seed(existing);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent(
+      'Add to this device keeps everything here and adds what is missing: 2 promotions, 1 competition and 1 technique. 1 record already here stays as this device has it.',
+    );
+    expect(stored()).toEqual(existing);
+
+    await user.click(within(confirm).getByRole('button', { name: 'Add to this device' }));
+    const after = stored();
+    // Both of this device's sessions are as they were, and the rest came from the file.
+    expect(after.sessions).toEqual(existing.sessions);
+    expect(after.promotions).toEqual(HISTORY.promotions);
+    expect(after.competitions).toEqual(HISTORY.competitions);
+    expect(after.techniques).toEqual(HISTORY.techniques);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Added 2 promotions, 1 competition and 1 technique.',
+    );
+    // The device now holds more than the file, so it does not count as backed up.
+    expect(window.localStorage.getItem(LAST_BACKUP_KEY)).toBeNull();
+  });
+
+  it('offers only to replace when the backup has nothing new, or cannot be added', async () => {
+    seed(HISTORY);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
+    let confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent('Everything in this backup is already on this device');
+    expect(within(confirm).queryByRole('button', { name: 'Add to this device' })).not.toBeInTheDocument();
+    expect(within(confirm).getByRole('button', { name: 'Replace everything' })).toBeInTheDocument();
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+
+    // A purple belt dated before this device's blue belt cannot sit in one history with it.
+    const clashing: AppData = {
+      ...emptyData(),
+      rank: { belt: 'purple', stripes: 0 },
+      promotions: [{ id: 'px', belt: 'purple', stripes: 0, date: '2023-01-01' }],
+    };
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(clashing));
+    confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent("This backup can't be added to this device.");
+    expect(within(confirm).queryByRole('button', { name: 'Add to this device' })).not.toBeInTheDocument();
+    expect(stored()).toEqual(HISTORY);
+  });
+
+  it('simply restores onto a device with no data', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent('This device has no data yet');
+    expect(within(confirm).queryByRole('button', { name: 'Add to this device' })).not.toBeInTheDocument();
+    await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
+    expect(stored()).toEqual(HISTORY);
   });
 
   it('keeps the current data when the restore is cancelled', async () => {
