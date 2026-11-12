@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   backupFileName,
+  backupReminder,
   BACKUP_FORMAT,
   BACKUP_VERSION,
   createBackupText,
   readBackup,
 } from './backup';
-import { emptyData, type AppData } from './types';
+import { emptyData, type AppData, type Session } from './types';
 
 const TODAY = '2026-11-11';
 const SAVED_AT = new Date(2026, 10, 10, 9, 30);
@@ -47,6 +48,46 @@ function errorOf(text: string): string {
   if (result.ok) throw new Error('expected the backup to be refused');
   return result.error;
 }
+
+describe('backupReminder', () => {
+  function withSessions(amount: number): AppData {
+    const sessions: Session[] = Array.from({ length: amount }, (_, index) => ({
+      id: `s${index}`,
+      date: '2026-10-01',
+      durationMinutes: 60,
+      type: 'gi',
+    }));
+    return { ...emptyData(), sessions };
+  }
+
+  it('stays quiet when there is nothing to lose', () => {
+    expect(backupReminder(emptyData(), null, null, TODAY)).toBeNull();
+    expect(backupReminder({ ...emptyData(), weeklyGoal: 3 }, '2020-01-01', null, TODAY)).toBeNull();
+  });
+
+  it('waits for ten records before suggesting a first backup', () => {
+    expect(backupReminder(withSessions(9), null, null, TODAY)).toBeNull();
+    expect(backupReminder(withSessions(10), null, null, TODAY)).toEqual({ kind: 'never' });
+  });
+
+  it('suggests another backup 30 days after the last one', () => {
+    expect(backupReminder(withSessions(1), '2026-10-13', null, TODAY)).toBeNull();
+    expect(backupReminder(withSessions(1), '2026-10-12', null, TODAY)).toEqual({
+      kind: 'overdue',
+      days: 30,
+    });
+    expect(backupReminder(withSessions(1), '2026-09-01', null, TODAY)).toEqual({
+      kind: 'overdue',
+      days: 71,
+    });
+  });
+
+  it('stays quiet for 30 days after being put off', () => {
+    expect(backupReminder(withSessions(10), null, '2026-11-01', TODAY)).toBeNull();
+    expect(backupReminder(withSessions(1), '2026-09-01', '2026-10-13', TODAY)).toBeNull();
+    expect(backupReminder(withSessions(1), '2026-09-01', '2026-10-12', TODAY)).not.toBeNull();
+  });
+});
 
 describe('backup files', () => {
   it('names the file after the day it was saved', () => {

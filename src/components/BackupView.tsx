@@ -91,6 +91,12 @@ export function BackupView({ data, today, onRestore }: Props) {
     if (!pending) return;
     const restored = pending.contents.data;
     onRestore(restored);
+    // The data now matches a file saved on that day, so that is when it was last backed up.
+    const { exportedOn } = pending.contents;
+    if (exportedOn) {
+      saveLastBackup(exportedOn);
+      setLastBackup(exportedOn);
+    }
     setPending(null);
     setStatus(
       `Restored ${count(restored.promotions.length, 'promotion')}, ${count(restored.sessions.length, 'session')} and ${count(restored.competitions.length, 'competition')}.`,
@@ -127,7 +133,7 @@ export function BackupView({ data, today, onRestore }: Props) {
           {nothingToBackUp
             ? 'There is nothing to back up yet.'
             : lastBackup
-              ? `Last backup from this device: ${formatDate(lastBackup)}`
+              ? `Last backup: ${formatDate(lastBackup)}`
               : 'No backup has been made from this device yet.'}
         </p>
       </section>

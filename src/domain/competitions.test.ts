@@ -6,14 +6,18 @@ import {
   deleteCompetition,
   deleteMatch,
   describeMatch,
+  formatCountdown,
   formatMedals,
   formatMethods,
   formatTally,
   MAX_MATCHES,
+  nextCompetition,
+  pastCompetitions,
   sortCompetitions,
   tally,
   updateCompetition,
   updateMatch,
+  upcomingCompetitions,
   type CompetitionInput,
   type MatchInput,
 } from './competitions';
@@ -21,6 +25,10 @@ import { emptyData, type AppData, type Competition, type Result } from './types'
 
 const TODAY = '2026-11-11';
 const OPEN: CompetitionInput = { name: 'Autumn Open', date: '2026-10-17', type: 'gi' };
+
+function add(data: AppData, competitionId: string, input: MatchInput): Result<AppData> {
+  return addMatch(data, competitionId, input, TODAY);
+}
 
 function must(result: Result<AppData>): AppData {
   if (!result.ok) throw new Error(result.error);
@@ -60,7 +68,7 @@ describe('competitions', () => {
   it.each([
     [{ ...OPEN, name: '   ' }, 'competition name'],
     [{ ...OPEN, name: 'x'.repeat(81) }, '80 characters'],
-    [{ ...OPEN, date: '2026-11-12' }, 'future'],
+    [{ ...OPEN, date: '2026-11-12', medal: 'gold' }, 'once the competition has taken place'],
     [{ ...OPEN, date: 'last month' }, 'valid competition date'],
     [{ ...OPEN, type: 'judo' }, 'gi or no-gi'],
     [{ ...OPEN, medal: 'platinum' }, 'no medal'],
@@ -71,7 +79,7 @@ describe('competitions', () => {
 
   it('edits the details and keeps the matches', () => {
     const { data, id } = withCompetition();
-    const withMatch = must(addMatch(data, id, { result: 'win', method: 'points' }));
+    const withMatch = must(add(data, id, { result: 'win', method: 'points' }));
 
     const edited = must(
       updateCompetition(withMatch, id, { ...OPEN, name: 'Winter Open', type: 'nogi' }, TODAY),
@@ -91,11 +99,70 @@ describe('competitions', () => {
   });
 });
 
+describe('upcoming competitions', () => {
+  const NEXT: CompetitionInput = { name: 'Winter Open', date: '2026-11-28', type: 'nogi' };
+
+  it('accepts a future date but takes no matches until the day', () => {
+    const { data, id } = withCompetition(NEXT);
+    expect(data.competitions[0]).toMatchObject({ name: 'Winter Open', date: '2026-11-28' });
+    expect(errorOf(add(data, id, { result: 'win', method: 'points' }))).toContain(
+      'from the day of the competition',
+    );
+    expect(addMatch(data, id, { result: 'win', method: 'points' }, '2026-11-28').ok).toBe(true);
+  });
+
+  it("won't move a competition with matches to a future date", () => {
+    const { data, id } = withCompetition();
+    const fought = must(add(data, id, { result: 'win', method: 'points' }));
+    expect(errorOf(updateCompetition(fought, id, { ...OPEN, date: '2026-12-01' }, TODAY))).toContain(
+      "can't be moved to a future date",
+    );
+    expect(updateCompetition(data, id, { ...OPEN, date: '2026-12-01' }, TODAY).ok).toBe(true);
+  });
+
+  it('separates upcoming from past, each in the order you would read them', () => {
+    let data = must(addCompetition(emptyData(), { ...OPEN, name: 'Later', date: '2027-02-01' }, TODAY));
+    data = must(addCompetition(data, { ...OPEN, name: 'Old', date: '2025-03-01' }, TODAY));
+    data = must(addCompetition(data, { ...OPEN, name: 'Soon', date: '2026-11-28' }, TODAY));
+    data = must(addCompetition(data, { ...OPEN, name: 'Today', date: TODAY }, TODAY));
+    data = must(addCompetition(data, { ...OPEN, name: 'Recent', date: '2026-10-17' }, TODAY));
+
+    const names = (list: Competition[]) => list.map((c) => c.name);
+    expect(names(upcomingCompetitions(data.competitions, TODAY))).toEqual(['Soon', 'Later']);
+    expect(names(pastCompetitions(data.competitions, TODAY))).toEqual(['Today', 'Recent', 'Old']);
+  });
+
+  it('counts down to the soonest one, including one today with no matches yet', () => {
+    const { data } = withCompetition(NEXT);
+    expect(nextCompetition(data.competitions, TODAY)?.name).toBe('Winter Open');
+    expect(nextCompetition([], TODAY)).toBeNull();
+
+    const today = must(addCompetition(data, { ...OPEN, name: 'Today Open', date: TODAY }, TODAY));
+    expect(nextCompetition(today.competitions, TODAY)?.name).toBe('Today Open');
+
+    const todayId = today.competitions[1].id;
+    const fought = must(add(today, todayId, { result: 'win', method: 'points' }));
+    expect(nextCompetition(fought.competitions, TODAY)?.name).toBe('Winter Open');
+  });
+
+  it('describes how far away a date is', () => {
+    expect(formatCountdown(TODAY, TODAY)).toBe('Today');
+    expect(formatCountdown('2026-11-12', TODAY)).toBe('Tomorrow');
+    expect(formatCountdown('2026-11-28', TODAY)).toBe('In 17 days');
+  });
+
+  it('leaves upcoming competitions out of the record', () => {
+    const { data } = withCompetition(NEXT);
+    expect(competitionRecord(data.competitions, TODAY)).toMatchObject({ competitions: 0, matches: 0 });
+    expect(competitionRecord(data.competitions, '2026-11-28')).toMatchObject({ competitions: 1 });
+  });
+});
+
 describe('matches', () => {
   it('adds matches in the order they were fought', () => {
     const { data, id } = withCompetition();
-    let next = must(addMatch(data, id, { result: 'win', method: 'submission', submission: ' Armbar ' }));
-    next = must(addMatch(next, id, { result: 'loss', method: 'points', opponent: ' A. Rival ' }));
+    let next = must(add(data, id, { result: 'win', method: 'submission', submission: ' Armbar ' }));
+    next = must(add(next, id, { result: 'loss', method: 'points', opponent: ' A. Rival ' }));
     expect(next.competitions[0].matches).toMatchObject([
       { result: 'win', method: 'submission', submission: 'Armbar' },
       { result: 'loss', method: 'points', opponent: 'A. Rival' },
@@ -104,8 +171,8 @@ describe('matches', () => {
 
   it('drops details that do not apply to the result', () => {
     const { data, id } = withCompetition();
-    let next = must(addMatch(data, id, { result: 'draw', method: 'points', submission: 'Armbar' }));
-    next = must(addMatch(next, id, { result: 'win', method: 'points', submission: 'Armbar' }));
+    let next = must(add(data, id, { result: 'draw', method: 'points', submission: 'Armbar' }));
+    next = must(add(next, id, { result: 'win', method: 'points', submission: 'Armbar' }));
     const [draw, win] = next.competitions[0].matches;
     expect(draw).toEqual({ id: draw.id, result: 'draw' });
     expect(win).toEqual({ id: win.id, result: 'win', method: 'points' });
@@ -119,22 +186,22 @@ describe('matches', () => {
     [{ result: 'win', method: 'points', opponent: 'x'.repeat(81) }, '80 characters'],
   ])('rejects %o', (input, message) => {
     const { data, id } = withCompetition();
-    expect(errorOf(addMatch(data, id, input as MatchInput))).toContain(message);
+    expect(errorOf(add(data, id, input as MatchInput))).toContain(message);
   });
 
   it('needs the competition to exist and stops at the limit', () => {
     const { data, id } = withCompetition();
     const input: MatchInput = { result: 'win', method: 'points' };
-    expect(errorOf(addMatch(data, 'gone', input))).toContain('no longer exists');
+    expect(errorOf(add(data, 'gone', input))).toContain('no longer exists');
 
     let full = data;
-    for (let index = 0; index < MAX_MATCHES; index += 1) full = must(addMatch(full, id, input));
-    expect(errorOf(addMatch(full, id, input))).toContain(`${MAX_MATCHES} matches`);
+    for (let index = 0; index < MAX_MATCHES; index += 1) full = must(add(full, id, input));
+    expect(errorOf(add(full, id, input))).toContain(`${MAX_MATCHES} matches`);
   });
 
   it('edits and removes a match', () => {
     const { data, id } = withCompetition();
-    const added = must(addMatch(data, id, { result: 'win', method: 'points' }));
+    const added = must(add(data, id, { result: 'win', method: 'points' }));
     const matchId = added.competitions[0].matches[0].id;
 
     const edited = must(updateMatch(added, id, matchId, { result: 'loss', method: 'decision' }));
@@ -202,7 +269,7 @@ describe('competitionRecord', () => {
   ];
 
   it('totals matches, methods and medals across competitions', () => {
-    const record = competitionRecord(competitions);
+    const record = competitionRecord(competitions, TODAY);
     expect(record).toMatchObject({ competitions: 3, matches: 6, wins: 4, losses: 1, draws: 1 });
     expect(record.winsBy).toEqual({
       submission: 2,
@@ -220,7 +287,7 @@ describe('competitionRecord', () => {
   });
 
   it('is all zeros with nothing logged', () => {
-    const record = competitionRecord([]);
+    const record = competitionRecord([], TODAY);
     expect(record).toMatchObject({ competitions: 0, matches: 0, wins: 0, losses: 0, draws: 0 });
     expect(formatMethods(record.winsBy)).toBe('');
     expect(formatMedals(record.medals)).toBe('');

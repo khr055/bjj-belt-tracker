@@ -35,7 +35,7 @@ export interface AppActions {
   addCompetition(input: CompetitionInput, today: string): string | null;
   updateCompetition(id: string, input: CompetitionInput, today: string): string | null;
   deleteCompetition(id: string): void;
-  addMatch(competitionId: string, input: MatchInput): string | null;
+  addMatch(competitionId: string, input: MatchInput, today: string): string | null;
   updateMatch(competitionId: string, matchId: string, input: MatchInput): string | null;
   deleteMatch(competitionId: string, matchId: string): void;
   /** Swaps in a whole data set, e.g. from a backup file. */
@@ -69,7 +69,7 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
     addCompetition: (input, today) => apply(addCompetition(data, input, today)),
     updateCompetition: (id, input, today) => apply(updateCompetition(data, id, input, today)),
     deleteCompetition: (id) => commit(deleteCompetition(data, id)),
-    addMatch: (competitionId, input) => apply(addMatch(data, competitionId, input)),
+    addMatch: (competitionId, input, today) => apply(addMatch(data, competitionId, input, today)),
     updateMatch: (competitionId, matchId, input) =>
       apply(updateMatch(data, competitionId, matchId, input)),
     deleteMatch: (competitionId, matchId) => commit(deleteMatch(data, competitionId, matchId)),

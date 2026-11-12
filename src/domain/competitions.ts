@@ -1,4 +1,4 @@
-import { isIsoDate } from './dates';
+import { daysBetween, isIsoDate } from './dates';
 import { MAX_NOTES_LENGTH } from './sessions';
 import {
   MATCH_METHODS,
@@ -52,13 +52,15 @@ export function validateCompetition(input: CompetitionInput, today: string): str
     return `Keep the name to ${MAX_NAME_LENGTH} characters or fewer.`;
   }
   if (!isIsoDate(input.date)) return 'Enter a valid competition date.';
-  if (input.date > today) return "A competition can't be dated in the future.";
   if (!SESSION_TYPES.includes(input.type)) return 'Choose gi or no-gi.';
   if (tooLong(input.division, MAX_NAME_LENGTH)) {
     return `Keep the division to ${MAX_NAME_LENGTH} characters or fewer.`;
   }
   if (input.medal !== undefined && !MEDALS.includes(input.medal)) {
     return 'Choose gold, silver, bronze or no medal.';
+  }
+  if (input.medal !== undefined && input.date > today) {
+    return 'A medal can be added once the competition has taken place.';
   }
   if (tooLong(input.notes, MAX_NOTES_LENGTH)) {
     return `Keep notes to ${MAX_NOTES_LENGTH} characters or fewer.`;
@@ -124,11 +126,16 @@ export function updateCompetition(
   input: CompetitionInput,
   today: string,
 ): Result<AppData> {
-  if (!data.competitions.some((c) => c.id === id)) {
-    return { ok: false, error: 'That competition no longer exists.' };
-  }
+  const existing = data.competitions.find((c) => c.id === id);
+  if (!existing) return { ok: false, error: 'That competition no longer exists.' };
   const error = validateCompetition(input, today);
   if (error) return { ok: false, error };
+  if (input.date > today && existing.matches.length > 0) {
+    return {
+      ok: false,
+      error: "This competition has matches, so it can't be moved to a future date.",
+    };
+  }
   return {
     ok: true,
     value: {
@@ -164,9 +171,18 @@ function withMatches(
   };
 }
 
-export function addMatch(data: AppData, competitionId: string, input: MatchInput): Result<AppData> {
+export function addMatch(
+  data: AppData,
+  competitionId: string,
+  input: MatchInput,
+  today: string,
+): Result<AppData> {
   const error = validateMatch(input);
   if (error) return { ok: false, error };
+  const competition = data.competitions.find((c) => c.id === competitionId);
+  if (competition && isUpcoming(competition, today)) {
+    return { ok: false, error: 'Matches can be added from the day of the competition.' };
+  }
   return withMatches(data, competitionId, (matches) =>
     matches.length >= MAX_MATCHES
       ? { ok: false, error: `A competition can hold up to ${MAX_MATCHES} matches.` }
@@ -198,6 +214,42 @@ export function deleteMatch(data: AppData, competitionId: string, matchId: strin
     value: matches.filter((m) => m.id !== matchId),
   }));
   return result.ok ? result.value : data;
+}
+
+/** True until the day of the competition. */
+export function isUpcoming(competition: Pick<Competition, 'date'>, today: string): boolean {
+  return competition.date > today;
+}
+
+/** Competitions still to come, soonest first. */
+export function upcomingCompetitions(competitions: Competition[], today: string): Competition[] {
+  return competitions
+    .filter((competition) => isUpcoming(competition, today))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Competitions that have taken place, including any today, newest first. */
+export function pastCompetitions(competitions: Competition[], today: string): Competition[] {
+  return sortCompetitions(competitions.filter((competition) => !isUpcoming(competition, today)));
+}
+
+/**
+ * The competition to count down to: the soonest one still to come, or one today that has no
+ * matches recorded yet.
+ */
+export function nextCompetition(competitions: Competition[], today: string): Competition | null {
+  const waiting = competitions
+    .filter((competition) => competition.date >= today && competition.matches.length === 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return waiting[0] ?? null;
+}
+
+/** "Today", "Tomorrow" or "In 12 days". */
+export function formatCountdown(date: string, today: string): string {
+  const days = daysBetween(today, date);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `In ${days} days`;
 }
 
 /** Newest date first; competitions on the same day show the most recently logged first. */
@@ -260,15 +312,17 @@ function methodCounts(matches: Match[], result: MatchResult): MethodCounts {
   return counts;
 }
 
-export function competitionRecord(competitions: Competition[]): CompetitionRecord {
-  const matches = competitions.flatMap((c) => c.matches);
+/** The record across competitions that have taken place; upcoming ones are not counted. */
+export function competitionRecord(competitions: Competition[], today: string): CompetitionRecord {
+  const held = competitions.filter((competition) => !isUpcoming(competition, today));
+  const matches = held.flatMap((c) => c.matches);
   const medals: Record<Medal, number> = { gold: 0, silver: 0, bronze: 0 };
-  for (const competition of competitions) {
+  for (const competition of held) {
     if (competition.medal) medals[competition.medal] += 1;
   }
   return {
     ...tally(matches),
-    competitions: competitions.length,
+    competitions: held.length,
     matches: matches.length,
     winsBy: methodCounts(matches, 'win'),
     lossesBy: methodCounts(matches, 'loss'),

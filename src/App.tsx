@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import { BackupReminder } from './components/BackupReminder';
 import { BackupView } from './components/BackupView';
 import { CompetitionRecordCard } from './components/CompetitionRecordCard';
 import { CompetitionsView } from './components/CompetitionsView';
 import { MatTimeStats } from './components/MatTimeStats';
+import { NextCompetitionCard } from './components/NextCompetitionCard';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
 import { SessionList } from './components/SessionList';
 import { TimeInGradeCard } from './components/TimeInGradeCard';
 import { TimelineView } from './components/TimelineView';
+import { nextCompetition, pastCompetitions } from './domain/competitions';
 import { todayIso } from './domain/dates';
 import { sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
@@ -29,6 +32,8 @@ export default function App() {
   const today = todayIso();
   const timeline = buildTimeline(data.promotions, data.rank, today);
   const defaults = sessionDefaults(data.sessions);
+  const next = nextCompetition(data.competitions, today);
+  const hasCompeted = pastCompetitions(data.competitions, today).length > 0;
 
   return (
     <div className="app">
@@ -59,18 +64,20 @@ export default function App() {
       <main className="app__main">
         {tab === 'overview' && (
           <>
+            <BackupReminder data={data} today={today} onBackUp={() => setTab('backup')} />
             <RankCard
               rank={data.rank}
               currentBeltSince={timeline.currentBeltSince}
               today={today}
               onSave={actions.setRank}
             />
+            {next && <NextCompetitionCard competition={next} today={today} />}
             {data.rank && (
               <TimeInGradeCard rank={data.rank} promotions={data.promotions} today={today} />
             )}
             <MatTimeStats data={data} today={today} />
-            {data.competitions.length > 0 && (
-              <CompetitionRecordCard competitions={data.competitions} />
+            {hasCompeted && (
+              <CompetitionRecordCard competitions={data.competitions} today={today} />
             )}
             <section className="card" aria-labelledby="quick-log-heading">
               <h2 id="quick-log-heading">Log a session</h2>
@@ -128,7 +135,7 @@ export default function App() {
             onAdd={(input) => actions.addCompetition(input, today)}
             onUpdate={(id, input) => actions.updateCompetition(id, input, today)}
             onDelete={actions.deleteCompetition}
-            onAddMatch={actions.addMatch}
+            onAddMatch={(competitionId, input) => actions.addMatch(competitionId, input, today)}
             onUpdateMatch={actions.updateMatch}
             onDeleteMatch={actions.deleteMatch}
           />

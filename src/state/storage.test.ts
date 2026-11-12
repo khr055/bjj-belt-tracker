@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { emptyData, type AppData } from '../domain/types';
 import { parseData, parseDataWithReport } from '../domain/parse';
-import { loadData, loadLastBackup, saveData, saveLastBackup, STORAGE_KEY } from './storage';
+import {
+  loadBackupSnooze,
+  loadData,
+  loadLastBackup,
+  saveBackupSnooze,
+  saveData,
+  saveLastBackup,
+  STORAGE_KEY,
+} from './storage';
 
 describe('storage', () => {
   it('round-trips app data through localStorage', () => {
@@ -129,5 +137,12 @@ describe('storage', () => {
     expect(loadLastBackup()).toBeNull();
     saveLastBackup('2026-11-11');
     expect(loadLastBackup()).toBe('2026-11-11');
+  });
+
+  it('remembers when the backup reminder was put off, separately from the last backup', () => {
+    expect(loadBackupSnooze()).toBeNull();
+    saveBackupSnooze('2026-11-10');
+    expect(loadBackupSnooze()).toBe('2026-11-10');
+    expect(loadLastBackup()).toBeNull();
   });
 });

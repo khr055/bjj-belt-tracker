@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createBackupText, readBackup } from './domain/backup';
 import { addDays, formatShortDate, todayIso, weekStart } from './domain/dates';
-import { emptyData, type AppData } from './domain/types';
+import { emptyData, type AppData, type Session } from './domain/types';
 import { downloadTextFile } from './state/files';
-import { STORAGE_KEY } from './state/storage';
+import { BACKUP_SNOOZE_KEY, LAST_BACKUP_KEY, STORAGE_KEY } from './state/storage';
 
 // jsdom has no downloads or share sheet; capture what would have been saved instead.
 vi.mock('./state/files', async (importOriginal) => ({
@@ -224,7 +224,7 @@ describe('Training log', () => {
     await user.type(within(list).getByLabelText('Search notes'), 'leg');
     expect(within(list).queryByText('Knee cut passing')).not.toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
-    expect(within(list).getByRole('status')).toHaveTextContent('Showing 1 of 2 sessions · 1 hours');
+    expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 2 sessions · 1 hours');
 
     // Both sessions are no-gi, so asking for gi leaves nothing.
     await user.click(within(list).getByRole('button', { name: 'Gi' }));
@@ -401,20 +401,125 @@ describe('Competitions', () => {
     expect(screen.getByText(/No competitions logged yet/)).toBeInTheDocument();
   });
 
-  it('refuses a competition dated in the future', async () => {
+  it('lists an upcoming competition with a countdown and no matches or medal', async () => {
+    seed({
+      competitions: [
+        {
+          id: 'c1',
+          date: '2024-10-19',
+          name: 'Autumn Open',
+          type: 'gi',
+          matches: [{ id: 'm1', result: 'win', method: 'points' }],
+        },
+      ],
+    });
     const user = userEvent.setup();
     render(<App />);
+    expect(screen.queryByRole('region', { name: 'Next competition' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Compete' }));
+
     await user.click(screen.getByRole('button', { name: 'Log competition' }));
     const form = screen.getByRole('form', { name: 'Log competition' });
-    await user.type(within(form).getByLabelText('Competition name'), 'Next Open');
+    await user.type(within(form).getByLabelText('Competition name'), 'Winter Open');
+    expect(within(form).getByRole('group', { name: 'Medal' })).toBeInTheDocument();
     fireEvent.change(within(form).getByLabelText('Competition date'), {
-      target: { value: addDays(todayIso(), 30) },
+      target: { value: addDays(todayIso(), 12) },
     });
-    // The date picker's own limit stops this in a browser; submit directly to reach the app's check.
-    fireEvent.submit(form);
-    expect(screen.getByRole('alert')).toHaveTextContent("A competition can't be dated in the future.");
-    expect(stored()).toBeNull();
+    expect(within(form).queryByRole('group', { name: 'Medal' })).not.toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Save competition' }));
+
+    const upcoming = screen.getByRole('list', { name: 'Upcoming' });
+    expect(upcoming).toHaveTextContent('Winter Open');
+    expect(upcoming).toHaveTextContent('In 12 days');
+    expect(screen.queryByRole('button', { name: 'Add match to Winter Open' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Past competitions' })).toHaveTextContent('Autumn Open');
+    // The record counts only competitions that have taken place.
+    expect(screen.getByRole('region', { name: 'Competition record' })).toHaveTextContent(
+      '1 match across 1 competition',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    const next = screen.getByRole('region', { name: 'Next competition' });
+    expect(next).toHaveTextContent('In 12 days');
+    expect(next).toHaveTextContent('Winter Open');
+  });
+});
+
+describe('Long session lists', () => {
+  it('shows the most recent 30 sessions and more on request', async () => {
+    const sessions: Session[] = Array.from({ length: 35 }, (_, index) => ({
+      id: `s${index}`,
+      date: addDays('2024-01-01', index),
+      durationMinutes: 60,
+      type: 'gi',
+    }));
+    seed({ sessions });
+    window.localStorage.setItem(LAST_BACKUP_KEY, todayIso());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(30);
+    expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent('4 Feb 2024');
+    expect(list).toHaveTextContent('Showing 30 of 35');
+
+    await user.click(within(list).getByRole('button', { name: 'Show more' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(35);
+    expect(within(list).queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Backup reminder', () => {
+  const sessions: Session[] = Array.from({ length: 10 }, (_, index) => ({
+    id: `s${index}`,
+    date: addDays('2024-01-01', index),
+    durationMinutes: 60,
+    type: 'gi',
+  }));
+
+  it('suggests a first backup once there is history, and can be put off', async () => {
+    seed({ sessions });
+    const user = userEvent.setup();
+    const first = render(<App />);
+
+    const reminder = screen.getByRole('region', { name: 'Backup reminder' });
+    expect(reminder).toHaveTextContent('has never been backed up');
+    await user.click(within(reminder).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('region', { name: 'Backup reminder' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(BACKUP_SNOOZE_KEY)).toBe(todayIso());
+
+    first.unmount();
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Backup reminder' })).not.toBeInTheDocument();
+  });
+
+  it('says how old the last backup is and leads to the Backup tab', async () => {
+    seed({ sessions: sessions.slice(0, 1) });
+    window.localStorage.setItem(LAST_BACKUP_KEY, addDays(todayIso(), -45));
+    const user = userEvent.setup();
+    render(<App />);
+
+    const reminder = screen.getByRole('region', { name: 'Backup reminder' });
+    expect(reminder).toHaveTextContent('Your last backup was 45 days ago.');
+    await user.click(within(reminder).getByRole('button', { name: 'Back up now' }));
+    expect(screen.getByRole('heading', { name: 'Back up' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Download backup' }));
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.queryByRole('region', { name: 'Backup reminder' })).not.toBeInTheDocument();
+  });
+
+  it('stays quiet with little history or a recent backup', () => {
+    seed({ sessions: sessions.slice(0, 9) });
+    const first = render(<App />);
+    expect(screen.queryByRole('region', { name: 'Backup reminder' })).not.toBeInTheDocument();
+    first.unmount();
+
+    seed({ sessions });
+    window.localStorage.setItem(LAST_BACKUP_KEY, addDays(todayIso(), -29));
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Backup reminder' })).not.toBeInTheDocument();
   });
 });
 
@@ -496,7 +601,7 @@ describe('Backup and restore', () => {
     expect(name).toMatch(/^bjj-belt-tracker-backup-\d{4}-\d{2}-\d{2}\.json$/);
     const restored = readBackup(text, '2026-11-11');
     expect(restored.ok && restored.value.data).toEqual(HISTORY);
-    expect(screen.getByText(/^Last backup from this device: /)).toBeInTheDocument();
+    expect(screen.getByText(/^Last backup: /)).toBeInTheDocument();
   });
 
   it('has nothing to download before any data exists', async () => {
@@ -529,6 +634,8 @@ describe('Backup and restore', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
     expect(stored()).toEqual(HISTORY);
     expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions, 1 session and 1 competition.');
+    // The data now matches a file saved today, so it counts as backed up today.
+    expect(window.localStorage.getItem(LAST_BACKUP_KEY)).toBe(todayIso());
 
     await user.click(screen.getByRole('button', { name: 'Overview' }));
     expect(screen.getByRole('heading', { name: 'Blue belt, 1 stripe' })).toBeInTheDocument();

@@ -7,14 +7,15 @@ import type { Competition } from '../domain/types';
 
 interface Props {
   competitions: Competition[];
+  today: string;
 }
 
 function count(amount: number, singular: string, plural: string): string {
   return `${amount} ${amount === 1 ? singular : plural}`;
 }
 
-export function CompetitionRecordCard({ competitions }: Props) {
-  const record = competitionRecord(competitions);
+export function CompetitionRecordCard({ competitions, today }: Props) {
+  const record = competitionRecord(competitions, today);
   const wins = formatMethods(record.winsBy);
   const losses = formatMethods(record.lossesBy);
   const medals = formatMedals(record.medals);

@@ -20,10 +20,14 @@ export function CompetitionForm({ initial, today, onSubmit, onCancel }: Props) {
   const [medal, setMedal] = useState<Medal | undefined>(initial?.medal);
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
+  // A competition that hasn't happened yet has no medal to record.
+  const stillToCome = date > today;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setError(onSubmit({ name, date, type, division, medal, notes }));
+    setError(
+      onSubmit({ name, date, type, division, medal: stillToCome ? undefined : medal, notes }),
+    );
   };
 
   return (
@@ -50,10 +54,15 @@ export function CompetitionForm({ initial, today, onSubmit, onCancel }: Props) {
           id={`${id}-date`}
           type="date"
           value={date}
-          max={today}
           required
+          aria-describedby={`${id}-date-hint`}
           onChange={(event) => setDate(event.target.value)}
         />
+        <p className="hint" id={`${id}-date-hint`}>
+          {stillToCome
+            ? 'This will be listed as upcoming. You can add matches from the day.'
+            : 'Use a future date for a competition you have entered.'}
+        </p>
       </div>
       <fieldset className="choices">
         <legend>Type</legend>
@@ -88,31 +97,33 @@ export function CompetitionForm({ initial, today, onSubmit, onCancel }: Props) {
           For example: Adult, blue belt, middleweight.
         </p>
       </div>
-      <fieldset className="choices">
-        <legend>Medal</legend>
-        <div className="choices__row">
-          <label className="chip">
-            <input
-              type="radio"
-              name={`${id}-medal`}
-              checked={medal === undefined}
-              onChange={() => setMedal(undefined)}
-            />
-            No medal
-          </label>
-          {MEDALS.map((option) => (
-            <label key={option} className="chip">
+      {!stillToCome && (
+        <fieldset className="choices">
+          <legend>Medal</legend>
+          <div className="choices__row">
+            <label className="chip">
               <input
                 type="radio"
                 name={`${id}-medal`}
-                checked={medal === option}
-                onChange={() => setMedal(option)}
+                checked={medal === undefined}
+                onChange={() => setMedal(undefined)}
               />
-              {MEDAL_LABELS[option]}
+              No medal
             </label>
-          ))}
-        </div>
-      </fieldset>
+            {MEDALS.map((option) => (
+              <label key={option} className="chip">
+                <input
+                  type="radio"
+                  name={`${id}-medal`}
+                  checked={medal === option}
+                  onChange={() => setMedal(option)}
+                />
+                {MEDAL_LABELS[option]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <div className="field">
         <label htmlFor={`${id}-notes`}>
           Notes <span className="muted">(optional)</span>

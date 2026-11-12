@@ -28,6 +28,9 @@ const TYPE_FILTERS = [
   ...SESSION_TYPES.map((type) => ({ value: type, label: SESSION_TYPE_LABELS[type] })),
 ] as const;
 
+/** Sessions shown at first, and added by each tap of "Show more". */
+const PAGE_SIZE = 30;
+
 function count(amount: number, noun: string): string {
   return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
 }
@@ -35,7 +38,14 @@ function count(amount: number, noun: string): string {
 export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
   const searchId = useId();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<SessionFilter>(NO_FILTER);
+  const [filter, setFilterState] = useState<SessionFilter>(NO_FILTER);
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  // A new filter is a new list, so it starts again from the top.
+  const setFilter = (next: SessionFilter) => {
+    setFilterState(next);
+    setVisible(PAGE_SIZE);
+  };
 
   if (sessions.length === 0) {
     return <p className="muted">No sessions logged yet.</p>;
@@ -74,7 +84,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
 
       <p className="muted" role="status">
         {filtering &&
-          `Showing ${shown.length} of ${count(sessions.length, 'session')} · ${formatHours(summarize(shown).minutes)} hours`}
+          `Found ${shown.length} of ${count(sessions.length, 'session')} · ${formatHours(summarize(shown).minutes)} hours`}
       </p>
 
       {shown.length === 0 && (
@@ -87,7 +97,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
       )}
 
       <ul className="list">
-        {shown.map((session) => {
+        {shown.slice(0, visible).map((session) => {
           const label = `${SESSION_TYPE_LABELS[session.type]} session on ${formatDate(session.date)}`;
           if (editingId === session.id) {
             return (
@@ -131,6 +141,21 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
           );
         })}
       </ul>
+
+      {shown.length > visible && (
+        <div className="actions">
+          <button
+            type="button"
+            className="button button--small"
+            onClick={() => setVisible(visible + PAGE_SIZE)}
+          >
+            Show more
+          </button>
+          <span className="muted">
+            Showing {visible} of {shown.length}
+          </span>
+        </div>
+      )}
     </>
   );
 }

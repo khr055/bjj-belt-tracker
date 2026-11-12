@@ -54,6 +54,7 @@ body {
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
 }
@@ -165,6 +166,14 @@ h2 {
   background: var(--notice-bg);
   color: var(--notice-text);
   font-size: 0.9rem;
+}
+
+/* A notice with something to do about it */
+.notice--action {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius);
 }
 
 .saved {

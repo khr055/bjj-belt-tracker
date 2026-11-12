@@ -11,7 +11,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Log stripe and belt promotions, including back-dated ones. Out-of-order entries are rejected.
 - See a timeline of promotions and the time spent at each belt and stripe.
 - Log training sessions (date, duration, gi or no-gi, optional notes), and edit or delete them.
-- Filter your sessions by gi or no-gi and search their notes.
+- Filter your sessions by gi or no-gi and search their notes. Long lists show the most recent 30
+  sessions, with more on request.
 - See sessions and hours this week, since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
@@ -22,6 +23,10 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Set a weekly goal of 1 to 7 sessions and see this week's progress and how often you reach it.
 - Log competitions and their matches (win, loss or draw, and how each was decided), and see your
   overall record, how you win and lose, and your medals.
+- Add a competition you have entered with a future date and see a countdown to it. Matches and a
+  medal can be added from the day.
+- Get a reminder on the Overview tab when your history has not been backed up for 30 days, or
+  has never been backed up once it holds 10 records. It can be put off for 30 days.
 
 ## Backups
 

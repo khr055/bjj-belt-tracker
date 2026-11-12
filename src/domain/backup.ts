@@ -1,4 +1,4 @@
-import { todayIso } from './dates';
+import { daysBetween, todayIso } from './dates';
 import { parseDataWithReport } from './parse';
 import { findHistoryConflict } from './promotions';
 import type { AppData, Result } from './types';
@@ -28,6 +28,33 @@ export interface BackupContents {
   exportedOn: string | null;
   /** Records in the file that were malformed or duplicated, and so left out. */
   skipped: number;
+}
+
+/** A reminder appears this many days after the last backup, or after it was put off. */
+export const BACKUP_REMINDER_DAYS = 30;
+/** Someone who has never backed up is reminded once they have this much to lose. */
+export const BACKUP_REMINDER_MIN_RECORDS = 10;
+
+export type BackupReminder = { kind: 'never' } | { kind: 'overdue'; days: number };
+
+/**
+ * Whether to suggest a backup. `lastBackup` is the day the data on this device was last saved to
+ * a file; `snoozedOn` is the day the reminder was last put off.
+ */
+export function backupReminder(
+  data: AppData,
+  lastBackup: string | null,
+  snoozedOn: string | null,
+  today: string,
+): BackupReminder | null {
+  const records = data.promotions.length + data.sessions.length + data.competitions.length;
+  if (records === 0) return null;
+  if (snoozedOn !== null && daysBetween(snoozedOn, today) < BACKUP_REMINDER_DAYS) return null;
+  if (lastBackup === null) {
+    return records >= BACKUP_REMINDER_MIN_RECORDS ? { kind: 'never' } : null;
+  }
+  const days = daysBetween(lastBackup, today);
+  return days >= BACKUP_REMINDER_DAYS ? { kind: 'overdue', days } : null;
 }
 
 /** Reads a backup file, refusing anything that isn't one or whose history can't be right. */
