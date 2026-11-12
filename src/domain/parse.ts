@@ -4,13 +4,16 @@ import { isValidGoal } from './goals';
 import { highestPromotion } from './promotions';
 import { isValidRank, rankValue } from './rank';
 import {
+  cleanCaught,
   isValidRounds,
   knownTechniqueIds,
+  MAX_CAUGHT,
+  MAX_CAUGHT_LENGTH,
   MAX_NOTES_LENGTH,
   MAX_SESSION_MINUTES,
   MAX_SESSION_TECHNIQUES,
 } from './sessions';
-import { MAX_TECHNIQUE_NAME_LENGTH, MAX_TECHNIQUES } from './techniques';
+import { cleanLink, MAX_TECHNIQUE_NAME_LENGTH, MAX_TECHNIQUES } from './techniques';
 import { MAX_TIME_OFF } from './timeOff';
 import {
   emptyData,
@@ -74,12 +77,15 @@ function toTechnique(value: unknown): Technique | null {
   if (!name || !POSITIONS.includes(value.position as Position)) return null;
   if (!TECHNIQUE_STATUSES.includes(value.status as TechniqueStatus)) return null;
   const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
+  // A link that is not a web address is dropped; the technique is kept.
+  const link = cleanLink(value.link);
   return {
     id: value.id,
     name,
     position: value.position as Position,
     status: value.status as TechniqueStatus,
     ...(notes ? { notes } : {}),
+    ...(link ? { link } : {}),
     addedOn: value.addedOn,
     // Techniques saved before stages were dated count from the day they were added.
     statusSince: isIsoDate(value.statusSince) ? value.statusSince : value.addedOn,
@@ -108,6 +114,9 @@ function toSession(value: unknown, techniques: Technique[]): Session | null {
     0,
     MAX_SESSION_TECHNIQUES,
   );
+  const caughtWith = cleanCaught(value.caughtWith)
+    .filter((name) => name.length <= MAX_CAUGHT_LENGTH)
+    .slice(0, MAX_CAUGHT);
   const kind = SESSION_KINDS.includes(value.kind as SessionKind)
     ? (value.kind as SessionKind)
     : undefined;
@@ -121,6 +130,7 @@ function toSession(value: unknown, techniques: Technique[]): Session | null {
     ...(notes ? { notes } : {}),
     ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
     ...(landedIds.length > 0 ? { landedIds } : {}),
+    ...(caughtWith.length > 0 ? { caughtWith } : {}),
   };
 }
 

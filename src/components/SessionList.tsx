@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { formatDate } from '../domain/dates';
 import {
+  caughtTally,
   describeSession,
   filterSessions,
   formatHours,
@@ -75,14 +76,18 @@ export function SessionList({ sessions, techniques, today, onUpdate, onDelete }:
           ))}
         </div>
         <div className="field">
-          <label htmlFor={searchId}>Search notes, kinds and techniques</label>
+          <label htmlFor={searchId}>Search sessions</label>
           <input
             id={searchId}
             type="search"
             value={filter.text}
             autoComplete="off"
+            aria-describedby={`${searchId}-hint`}
             onChange={(event) => setFilter({ ...filter, text: event.target.value })}
           />
+          <p className="hint" id={`${searchId}-hint`}>
+            Looks in notes, kinds, techniques and what you were caught with.
+          </p>
         </div>
       </div>
 
@@ -110,6 +115,7 @@ export function SessionList({ sessions, techniques, today, onUpdate, onDelete }:
                   initial={session}
                   defaults={sessionDefaults(sessions)}
                   techniques={techniques}
+                  caughtBefore={caughtTally(sessions).map((entry) => entry.name)}
                   today={today}
                   onSubmit={(input) => {
                     const problem = onUpdate(session.id, input);
@@ -141,6 +147,9 @@ export function SessionList({ sessions, techniques, today, onUpdate, onDelete }:
                 <p className="muted list__detail">
                   Landed: {landed.map((technique) => technique.name).join(', ')}
                 </p>
+              )}
+              {session.caughtWith && session.caughtWith.length > 0 && (
+                <p className="muted list__detail">Caught with: {session.caughtWith.join(', ')}</p>
               )}
               {session.notes && <p className="list__detail list__notes">{session.notes}</p>}
               <div className="actions actions--tight">

@@ -41,6 +41,11 @@ export interface Session {
   techniqueIds?: string[];
   /** The techniques landed in rolling, by id. Left out when there are none. */
   landedIds?: string[];
+  /**
+   * The submissions the practitioner was caught with in rolling, by name. They are the other
+   * person's, so they are not journal techniques. Left out when there are none.
+   */
+  caughtWith?: string[];
 }
 
 export const POSITIONS = [
@@ -67,6 +72,8 @@ export interface Technique {
   position: Position;
   status: TechniqueStatus;
   notes?: string;
+  /** A web page about the technique, such as an instructional video. */
+  link?: string;
   /** The day it was added to the journal. */
   addedOn: string;
   /** The day it reached its current stage. */

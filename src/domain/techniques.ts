@@ -18,6 +18,7 @@ export type TechniqueInput = Omit<Technique, 'id' | 'addedOn' | 'statusSince'>;
 
 export const MAX_TECHNIQUE_NAME_LENGTH = 60;
 export const MAX_TECHNIQUES = 300;
+export const MAX_LINK_LENGTH = 500;
 /** A technique still being worked on goes stale after this many days without training it. */
 export const STALE_DAYS = 30;
 
@@ -40,6 +41,36 @@ export const STATUS_LABELS: Record<TechniqueStatus, string> = {
   landing: 'Landing in rolling',
 };
 
+/**
+ * A web link in the form it is stored: trimmed, with `https://` added when no scheme was typed.
+ * Undefined for a blank; null for anything that is not an http or https address, which is all a
+ * link may be, since it is opened when tapped.
+ */
+export function cleanLink(value: unknown): string | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text) return undefined;
+  if (text.length > MAX_LINK_LENGTH || /\s/.test(text)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(withScheme);
+    const web = url.protocol === 'http:' || url.protocol === 'https:';
+    return web && url.hostname.includes('.') ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The site a link goes to, such as "youtube.com", for showing in place of the whole address. */
+export function linkHost(link: string): string {
+  try {
+    return new URL(link).hostname.replace(/^www\./, '');
+  } catch {
+    return link;
+  }
+}
+
 /** Names are compared without regard to case or surrounding spaces. */
 function nameKey(name: string): string {
   return name.trim().toLowerCase();
@@ -56,6 +87,9 @@ export function validateTechnique(input: TechniqueInput, others: Technique[]): s
   if ((input.notes ?? '').trim().length > MAX_NOTES_LENGTH) {
     return `Keep notes to ${MAX_NOTES_LENGTH} characters or fewer.`;
   }
+  if (cleanLink(input.link) === null) {
+    return 'Enter a web address for the link, such as youtube.com/watch?v=..., or leave it blank.';
+  }
   const clash = others.find((other) => nameKey(other.name) === nameKey(input.name));
   if (clash) return `You already have a technique called ${clash.name}.`;
   return null;
@@ -63,11 +97,13 @@ export function validateTechnique(input: TechniqueInput, others: Technique[]): s
 
 function clean(input: TechniqueInput): TechniqueInput {
   const notes = input.notes?.trim();
+  const link = cleanLink(input.link);
   return {
     name: input.name.trim(),
     position: input.position,
     status: input.status,
     ...(notes ? { notes } : {}),
+    ...(link ? { link } : {}),
   };
 }
 

@@ -263,6 +263,18 @@ h2 {
   gap: 12px;
 }
 
+/* A text box with its button beside it, on one line at every width. */
+.field-row--add {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  margin-top: 8px;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
 label,
 legend {
   font-size: 0.85rem;

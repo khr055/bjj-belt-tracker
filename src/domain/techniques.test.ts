@@ -9,6 +9,8 @@ import {
 import {
   activityOf,
   addTechnique,
+  cleanLink,
+  linkHost,
   nextStatus,
   sessionsFor,
   sessionsToLand,
@@ -493,5 +495,58 @@ describe('going stale around time off', () => {
     expect(focus.stale).toEqual([{ technique: techniques[1], days: 74, daysOff: 28 }]);
     // Held back from stale by the time off, but not trained in the last 30 days: in neither list.
     expect(focus.recent).toEqual([]);
+  });
+});
+
+describe('a link on a technique', () => {
+  it('keeps a web address, adding https when no scheme was typed', () => {
+    expect(cleanLink('https://www.youtube.com/watch?v=abc')).toBe(
+      'https://www.youtube.com/watch?v=abc',
+    );
+    expect(cleanLink('  youtube.com/watch?v=abc ')).toBe('https://youtube.com/watch?v=abc');
+    expect(cleanLink('http://example.com')).toBe('http://example.com/');
+    expect(cleanLink('')).toBeUndefined();
+    expect(cleanLink('   ')).toBeUndefined();
+    expect(cleanLink(undefined)).toBeUndefined();
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,hello',
+    'file:///etc/passwd',
+    'mailto:coach@example.com',
+    'not a link',
+    'armbar',
+    `https://example.com/${'x'.repeat(500)}`,
+  ])('refuses %s', (value) => {
+    expect(cleanLink(value)).toBeNull();
+  });
+
+  it('refuses anything that is not text', () => {
+    expect(cleanLink(7)).toBeNull();
+    expect(cleanLink({ href: 'https://example.com' })).toBeNull();
+  });
+
+  it('is stored tidied, survives other edits and a change of stage, and can be removed', () => {
+    let data = mustAdd(emptyData(), { ...KNEE_CUT, link: 'youtube.com/watch?v=abc' });
+    const { id } = data.techniques[0];
+    expect(data.techniques[0].link).toBe('https://youtube.com/watch?v=abc');
+
+    const moved = setTechniqueStatus(data, id, 'landing', TODAY);
+    if (!moved.ok) throw new Error(moved.error);
+    expect(moved.value.techniques[0].link).toBe('https://youtube.com/watch?v=abc');
+
+    const bad = updateTechnique(data, id, { ...KNEE_CUT, link: 'javascript:alert(1)' }, TODAY);
+    expect(!bad.ok && bad.error).toContain('web address');
+
+    const cleared = updateTechnique(data, id, { ...KNEE_CUT, link: '' }, TODAY);
+    if (!cleared.ok) throw new Error(cleared.error);
+    data = cleared.value;
+    expect(data.techniques[0]).not.toHaveProperty('link');
+  });
+
+  it('names the site a link goes to', () => {
+    expect(linkHost('https://www.youtube.com/watch?v=abc')).toBe('youtube.com');
+    expect(linkHost('https://bjjfanatics.com/x')).toBe('bjjfanatics.com');
   });
 });

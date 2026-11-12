@@ -221,7 +221,7 @@ describe('Training log', () => {
     expect(within(list).getByText('Knee cut passing')).toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
 
-    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'leg');
+    await user.type(within(list).getByLabelText('Search sessions'), 'leg');
     expect(within(list).queryByText('Knee cut passing')).not.toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 2 sessions · 1 hours');
@@ -543,10 +543,10 @@ describe('Technique journal', () => {
 
     const list = screen.getByRole('region', { name: 'Sessions' });
     expect(list).toHaveTextContent('Worked on: Knee cut pass, Triangle');
-    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'triangle');
+    await user.type(within(list).getByLabelText('Search sessions'), 'triangle');
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 1 session');
-    await user.clear(within(list).getByLabelText('Search notes, kinds and techniques'));
-    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'kimura');
+    await user.clear(within(list).getByLabelText('Search sessions'));
+    await user.type(within(list).getByLabelText('Search sessions'), 'kimura');
     expect(within(list).getByText('No sessions match.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Techniques' }));
@@ -773,7 +773,7 @@ describe('Kinds of session and rounds', () => {
 
     const list = screen.getByRole('region', { name: 'Sessions' });
     expect(list).toHaveTextContent('Gi · Open mat · 6 rounds');
-    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'open mat');
+    await user.type(within(list).getByLabelText('Search sessions'), 'open mat');
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 1 session');
 
     await user.click(screen.getByRole('button', { name: 'Overview' }));
@@ -1158,6 +1158,112 @@ describe('Time off', () => {
     expect(stored().timeOff).toEqual([]);
     expect(streak).toHaveTextContent('0 weeks');
     expect(streak).toHaveTextContent('Train this week to start one');
+  });
+});
+
+describe('Caught with', () => {
+  it('records what a session was caught with and shows what catches you most', async () => {
+    seed({
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', caughtWith: ['Armbar'] },
+        { id: 's2', date: '2024-05-08', durationMinutes: 60, type: 'gi', caughtWith: ['Armbar', 'Kimura'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Caught with' });
+    const rows = within(card).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Armbar');
+    expect(rows[0]).toHaveTextContent('2 sessions');
+    expect(rows[0]).toHaveTextContent('Last on 8 May');
+    expect(rows[1]).toHaveTextContent('Kimura');
+
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    const form = screen.getByRole('form', { name: 'Log session' });
+    const picker = within(form).getByRole('group', { name: /Caught with/ });
+    // Names used before are one tap; a new one is typed, and Enter adds it without logging.
+    await user.click(within(picker).getByRole('checkbox', { name: 'Armbar' }));
+    await user.type(within(picker).getByLabelText('Add a submission you were caught with'), 'triangle{Enter}');
+    expect(stored().sessions).toHaveLength(2);
+    expect(within(picker).getByRole('checkbox', { name: 'triangle' })).toBeChecked();
+    // Typing a name used before, in another case, ticks the one already there.
+    await user.type(within(picker).getByLabelText('Add a submission you were caught with'), 'KIMURA');
+    await user.click(within(picker).getByRole('button', { name: 'Add' }));
+    expect(within(picker).getByRole('checkbox', { name: 'Kimura' })).toBeChecked();
+    await user.click(within(picker).getByRole('checkbox', { name: 'Kimura' }));
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+
+    expect(stored().sessions[2].caughtWith).toEqual(['Armbar', 'triangle']);
+    // The next session starts clear.
+    expect(within(picker).getByRole('checkbox', { name: 'Armbar' })).not.toBeChecked();
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(list).toHaveTextContent('Caught with: Armbar, triangle');
+    await user.type(within(list).getByLabelText('Search sessions'), 'kimura');
+    expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 3 sessions');
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(
+      within(screen.getByRole('region', { name: 'Caught with' })).getAllByRole('listitem')[0],
+    ).toHaveTextContent('3 sessions');
+  });
+
+  it('takes a submission off a session when it is edited, and hides the card with none', async () => {
+    seed({
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', caughtWith: ['Armbar'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const form = screen.getByRole('form', { name: 'Edit session' });
+    await user.click(within(form).getByRole('checkbox', { name: 'Armbar' }));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0]).not.toHaveProperty('caughtWith');
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.queryByRole('region', { name: 'Caught with' })).not.toBeInTheDocument();
+  });
+});
+
+describe('A link on a technique', () => {
+  it('adds a link, opens it in a new tab, and refuses one that is not a web address', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    await user.click(screen.getByRole('button', { name: 'Add technique' }));
+    const form = screen.getByRole('form', { name: 'Add technique' });
+    await user.type(within(form).getByLabelText('Technique name'), 'Knee cut pass');
+    await user.click(within(form).getByRole('radio', { name: 'Guard passing' }));
+    await user.type(within(form).getByLabelText(/Link/), 'javascript:alert(1)');
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('Enter a web address for the link');
+    expect(stored()).toBeNull();
+
+    await user.clear(within(form).getByLabelText(/Link/));
+    await user.type(within(form).getByLabelText(/Link/), 'www.youtube.com/watch?v=abc');
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+
+    expect(stored().techniques[0].link).toBe('https://www.youtube.com/watch?v=abc');
+    const link = screen.getByRole('link', {
+      name: 'Open the link for Knee cut pass (youtube.com), in a new tab',
+    });
+    expect(link).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abc');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveTextContent('Open link (youtube.com)');
+
+    // Clearing the box removes the link.
+    await user.click(screen.getByRole('button', { name: 'Edit Knee cut pass' }));
+    const edit = screen.getByRole('form', { name: 'Edit technique' });
+    expect(within(edit).getByLabelText(/Link/)).toHaveValue('https://www.youtube.com/watch?v=abc');
+    await user.clear(within(edit).getByLabelText(/Link/));
+    await user.click(within(edit).getByRole('button', { name: 'Save changes' }));
+    expect(stored().techniques[0]).not.toHaveProperty('link');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });
 

@@ -8,6 +8,7 @@ import {
   groupByPosition,
   isStale,
   landedIn,
+  linkHost,
   nextStatus,
   POSITION_LABELS,
   sessionsFor,
@@ -183,6 +184,18 @@ export function TechniquesView({
           )}
         </div>
         {technique.notes && <p className="list__detail list__notes">{technique.notes}</p>}
+        {technique.link && (
+          <p className="list__detail">
+            <a
+              href={technique.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open the link for ${name} (${linkHost(technique.link)}), in a new tab`}
+            >
+              Open link ({linkHost(technique.link)})
+            </a>
+          </p>
+        )}
         <div className="actions actions--tight">
           {next && (
             <button

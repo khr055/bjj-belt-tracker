@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { MAX_NOTES_LENGTH } from '../domain/sessions';
 import {
+  MAX_LINK_LENGTH,
   MAX_TECHNIQUE_NAME_LENGTH,
   POSITION_LABELS,
   STATUS_LABELS,
@@ -27,12 +28,13 @@ export function TechniqueForm({ initial, onSubmit, onCancel }: Props) {
   const [position, setPosition] = useState<Position | undefined>(initial?.position);
   const [status, setStatus] = useState<TechniqueStatus>(initial?.status ?? 'learning');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [link, setLink] = useState(initial?.link ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     // An unchosen position reaches the rules as it is, and they ask for one.
-    setError(onSubmit({ name, position: position as Position, status, notes }));
+    setError(onSubmit({ name, position: position as Position, status, notes, link }));
   };
 
   return (
@@ -100,6 +102,27 @@ export function TechniqueForm({ initial, onSubmit, onCancel }: Props) {
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
         />
+      </div>
+      <div className="field">
+        <label htmlFor={`${id}-link`}>
+          Link <span className="muted">(optional)</span>
+        </label>
+        <input
+          id={`${id}-link`}
+          type="text"
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="off"
+          value={link}
+          maxLength={MAX_LINK_LENGTH}
+          aria-describedby={`${id}-link-hint`}
+          onChange={(event) => setLink(event.target.value)}
+        />
+        <p className="hint" id={`${id}-link-hint`}>
+          A web page about it, such as an instructional video.
+        </p>
       </div>
       {error && (
         <p className="error" role="alert">

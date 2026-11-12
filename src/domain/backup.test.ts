@@ -269,6 +269,36 @@ describe('backup files', () => {
     expect(result.value.skipped).toBe(3);
   });
 
+  it('restores a version 6 backup unchanged, and keeps what a version 7 backup adds', () => {
+    const old = readBackup(file({ version: 6, data: DATA }), TODAY);
+    expect(old.ok && old.value.data).toEqual(DATA);
+
+    const [first] = DATA.techniques;
+    const data = {
+      ...DATA,
+      techniques: [
+        { ...first, link: 'https://youtube.com/watch?v=abc' },
+        // A link that could run script is dropped; the technique is kept.
+        { ...first, id: 'bad', name: 'Other', link: 'javascript:alert(1)' },
+      ],
+      sessions: [
+        {
+          id: 's1',
+          date: '2026-11-01',
+          durationMinutes: 60,
+          type: 'gi',
+          caughtWith: ['Armbar', 'armbar', 7, 'x'.repeat(61), ' Triangle '],
+        },
+      ],
+    };
+    const result = readBackup(file({ version: 7, data }), TODAY);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.data.techniques[0].link).toBe('https://youtube.com/watch?v=abc');
+    expect(result.value.data.techniques[1]).not.toHaveProperty('link');
+    expect(result.value.data.sessions[0].caughtWith).toEqual(['Armbar', 'Triangle']);
+    expect(result.value.skipped).toBe(0);
+  });
+
   it('saves backups in the current version', () => {
     expect(JSON.parse(createBackupText(DATA, SAVED_AT)).version).toBe(BACKUP_VERSION);
   });

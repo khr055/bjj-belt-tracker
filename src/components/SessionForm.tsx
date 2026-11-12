@@ -14,6 +14,7 @@ import {
   type SessionType,
   type Technique,
 } from '../domain/types';
+import { CaughtPicker } from './CaughtPicker';
 import { TechniquePicker } from './TechniquePicker';
 
 interface Props {
@@ -23,6 +24,8 @@ interface Props {
   defaults: SessionDefaults;
   /** The journal, so the techniques worked on can be ticked. */
   techniques: Technique[];
+  /** What the practitioner has been caught with before, most common first. */
+  caughtBefore: string[];
   today: string;
   onSubmit(input: SessionInput): string | null;
   onCancel?(): void;
@@ -30,7 +33,15 @@ interface Props {
 
 const DURATION_PRESETS = [60, 90, 120];
 
-export function SessionForm({ initial, defaults, techniques, today, onSubmit, onCancel }: Props) {
+export function SessionForm({
+  initial,
+  defaults,
+  techniques,
+  caughtBefore,
+  today,
+  onSubmit,
+  onCancel,
+}: Props) {
   const id = useId();
   const [date, setDate] = useState(initial?.date ?? today);
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? defaults.durationMinutes));
@@ -41,6 +52,7 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [techniqueIds, setTechniqueIds] = useState(initial?.techniqueIds ?? []);
   const [landedIds, setLandedIds] = useState(initial?.landedIds ?? []);
+  const [caughtWith, setCaughtWith] = useState(initial?.caughtWith ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -56,6 +68,7 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
       notes,
       techniqueIds,
       landedIds,
+      caughtWith,
     });
     setError(problem);
     // A new session keeps its date, duration, type and kind so the next class can be logged
@@ -67,6 +80,7 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
       setNotes('');
       setTechniqueIds([]);
       setLandedIds([]);
+      setCaughtWith([]);
     }
   };
 
@@ -170,6 +184,7 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
           techniqueIds.includes(technique.id) || technique.status === 'landing'
         }
       />
+      <CaughtPicker suggestions={caughtBefore} selected={caughtWith} onChange={setCaughtWith} />
       <div className="field">
         <label htmlFor={`${id}-notes`}>
           Notes <span className="muted">(optional)</span>

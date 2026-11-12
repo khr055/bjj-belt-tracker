@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BackupReminder } from './components/BackupReminder';
 import { BackupView } from './components/BackupView';
+import { CaughtCard } from './components/CaughtCard';
 import { CompetitionRecordCard } from './components/CompetitionRecordCard';
 import { CompetitionsView } from './components/CompetitionsView';
 import { MatTimeStats } from './components/MatTimeStats';
@@ -15,7 +16,7 @@ import { TimeOffCard } from './components/TimeOffCard';
 import { TimelineView } from './components/TimelineView';
 import { nextCompetition, pastCompetitions } from './domain/competitions';
 import { todayIso } from './domain/dates';
-import { sessionDefaults } from './domain/sessions';
+import { caughtTally, sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
 import { TrendsCard } from './components/TrendsCard';
 import { useAppState } from './state/useAppState';
@@ -36,6 +37,7 @@ export default function App() {
   const today = todayIso();
   const timeline = buildTimeline(data.promotions, data.rank, today);
   const defaults = sessionDefaults(data.sessions);
+  const caughtBefore = caughtTally(data.sessions).map((entry) => entry.name);
   const next = nextCompetition(data.competitions, today);
   const hasCompeted = pastCompetitions(data.competitions, today).length > 0;
 
@@ -88,6 +90,7 @@ export default function App() {
                 today={today}
               />
             )}
+            <CaughtCard sessions={data.sessions} />
             {hasCompeted && (
               <CompetitionRecordCard competitions={data.competitions} today={today} />
             )}
@@ -96,6 +99,7 @@ export default function App() {
               <SessionForm
                 defaults={defaults}
                 techniques={data.techniques}
+                caughtBefore={caughtBefore}
                 today={today}
                 onSubmit={(input) => actions.addSession(input, today)}
               />
@@ -120,6 +124,7 @@ export default function App() {
               <SessionForm
                 defaults={defaults}
                 techniques={data.techniques}
+                caughtBefore={caughtBefore}
                 today={today}
                 onSubmit={(input) => actions.addSession(input, today)}
               />

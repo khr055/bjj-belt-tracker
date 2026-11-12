@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSession,
+  caughtTally,
+  cleanCaught,
   deleteSession,
   describeSession,
   filterSessions,
@@ -42,6 +44,11 @@ describe('addSession', () => {
     [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: -1 }, 'rounds'],
     [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: 2.5 }, 'rounds'],
     [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: 31 }, 'rounds'],
+    [
+      { date: TODAY, durationMinutes: 60, type: 'gi', caughtWith: Array.from({ length: 11 }, (_, i) => `Sub ${i}`) },
+      'up to 10 submissions',
+    ],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', caughtWith: ['x'.repeat(61)] }, '60 characters'],
     [{ date: TODAY, durationMinutes: 60, type: 'gi', notes: 'x'.repeat(501) }, '500 characters'],
   ])('rejects %o', (input, message) => {
     const result = addSession(emptyData(), input as SessionInput, TODAY);
@@ -240,5 +247,45 @@ describe('the kind of session and rounds rolled', () => {
     data = mustAdd(data, { ...base, kind: 'class' });
     const found = filterSessions(data.sessions, { type: 'all', text: 'open mat' });
     expect(found.map((session) => session.kind)).toEqual(['open-mat']);
+  });
+});
+
+describe('what a session was caught with', () => {
+  const base = { date: TODAY, durationMinutes: 60, type: 'gi' } as const;
+
+  it('tidies the names, keeps each once whatever its case, and leaves an empty list off', () => {
+    const data = mustAdd(emptyData(), {
+      ...base,
+      caughtWith: ['  Armbar ', 'armbar', 'Bow   and arrow', '', '  '],
+    });
+    expect(data.sessions[0].caughtWith).toEqual(['Armbar', 'Bow and arrow']);
+    expect(mustAdd(emptyData(), { ...base, caughtWith: [] }).sessions[0]).not.toHaveProperty(
+      'caughtWith',
+    );
+    expect(cleanCaught('Armbar')).toEqual([]);
+    expect(cleanCaught(['Armbar', 7, null])).toEqual(['Armbar']);
+  });
+
+  it('counts each name once a session, most common first, with its latest spelling', () => {
+    const sessions: Session[] = [
+      { id: 'a', ...base, date: '2026-10-01', caughtWith: ['armbar', 'Triangle'] },
+      { id: 'b', ...base, date: '2026-11-03', caughtWith: ['Armbar'] },
+      { id: 'c', ...base, date: '2026-10-20', caughtWith: ['Kimura', 'ARMBAR'] },
+      { id: 'd', ...base, date: '2026-11-05', caughtWith: ['Guillotine'] },
+      { id: 'e', ...base, date: '2026-11-07' },
+    ];
+    expect(caughtTally(sessions)).toEqual([
+      { name: 'Armbar', sessions: 3, last: '2026-11-03' },
+      // One session each: most recent first.
+      { name: 'Guillotine', sessions: 1, last: '2026-11-05' },
+      { name: 'Kimura', sessions: 1, last: '2026-10-20' },
+      { name: 'Triangle', sessions: 1, last: '2026-10-01' },
+    ]);
+    expect(caughtTally([])).toEqual([]);
+  });
+
+  it('finds a session by what it was caught with', () => {
+    const data = mustAdd(mustAdd(emptyData(), { ...base, caughtWith: ['Bow and arrow'] }), base);
+    expect(filterSessions(data.sessions, { type: 'all', text: 'arrow' })).toHaveLength(1);
   });
 });

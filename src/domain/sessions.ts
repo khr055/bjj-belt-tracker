@@ -20,6 +20,8 @@ export const DEFAULT_SESSION_MINUTES = 60;
 export const MAX_NOTES_LENGTH = 500;
 export const MAX_SESSION_TECHNIQUES = 20;
 export const MAX_ROUNDS = 30;
+export const MAX_CAUGHT = 10;
+export const MAX_CAUGHT_LENGTH = 60;
 export const DEFAULT_SESSION_KIND: SessionKind = 'class';
 
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = { gi: 'Gi', nogi: 'No-gi' };
@@ -30,6 +32,24 @@ export const SESSION_KIND_LABELS: Record<SessionKind, string> = {
   drilling: 'Drilling',
   private: 'Private lesson',
 };
+
+/** Names are the same whatever their case or spacing. */
+export function sameName(a: string, b: string): boolean {
+  const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+  return key(a) === key(b);
+}
+
+/** Tidied names, each once, in the order given. Anything that is not text is left out. */
+export function cleanCaught(names: unknown): string[] {
+  if (!Array.isArray(names)) return [];
+  const kept: string[] = [];
+  for (const value of names) {
+    if (typeof value !== 'string') continue;
+    const name = value.trim().replace(/\s+/g, ' ');
+    if (name && !kept.some((other) => sameName(other, name))) kept.push(name);
+  }
+  return kept;
+}
 
 export function isValidRounds(rounds: unknown): rounds is number {
   return (
@@ -68,6 +88,13 @@ export function validateSession(input: SessionInput, today: string): string | nu
   if (new Set(input.landedIds ?? []).size > MAX_SESSION_TECHNIQUES) {
     return `Choose up to ${MAX_SESSION_TECHNIQUES} techniques landed in a session.`;
   }
+  const caught = cleanCaught(input.caughtWith);
+  if (caught.length > MAX_CAUGHT) {
+    return `Record up to ${MAX_CAUGHT} submissions you were caught with.`;
+  }
+  if (caught.some((name) => name.length > MAX_CAUGHT_LENGTH)) {
+    return `Keep each submission to ${MAX_CAUGHT_LENGTH} characters or fewer.`;
+  }
   return null;
 }
 
@@ -83,6 +110,7 @@ function pick(input: SessionInput, techniques: Technique[]): SessionInput {
   const notes = input.notes?.trim();
   const techniqueIds = knownTechniqueIds(input.techniqueIds, techniques);
   const landedIds = knownTechniqueIds(input.landedIds, techniques);
+  const caughtWith = cleanCaught(input.caughtWith);
   return {
     date: input.date,
     durationMinutes: input.durationMinutes,
@@ -92,6 +120,7 @@ function pick(input: SessionInput, techniques: Technique[]): SessionInput {
     ...(notes ? { notes } : {}),
     ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
     ...(landedIds.length > 0 ? { landedIds } : {}),
+    ...(caughtWith.length > 0 ? { caughtWith } : {}),
   };
 }
 
@@ -176,7 +205,8 @@ export function describeSession(session: Session): string {
 
 /**
  * Keeps sessions of the chosen type where every word searched for appears in the notes, in the
- * kind of session, or in the name of a technique worked on or landed.
+ * kind of session, in the name of a technique worked on or landed, or in what the practitioner
+ * was caught with.
  */
 export function filterSessions(
   sessions: Session[],
@@ -192,7 +222,9 @@ export function filterSessions(
       ...sessionLanded(session, techniques),
     ].map((technique) => technique.name);
     const kind = session.kind ? SESSION_KIND_LABELS[session.kind] : '';
-    const text = [session.notes ?? '', kind, ...names].join('\n').toLowerCase();
+    const text = [session.notes ?? '', kind, ...names, ...(session.caughtWith ?? [])]
+      .join('\n')
+      .toLowerCase();
     return words.every((word) => text.includes(word));
   });
 }
@@ -255,4 +287,39 @@ export function matTimeStats(data: Pick<AppData, 'promotions' | 'sessions'>): Ma
 /** Hours to one decimal place, e.g. 90 minutes -> "1.5". */
 export function formatHours(minutes: number): string {
   return String(Math.round(minutes / 6) / 10);
+}
+
+export interface CaughtEntry {
+  /** As it was spelt on the most recent session. */
+  name: string;
+  /** Sessions it was recorded on. */
+  sessions: number;
+  /** The date of the most recent of them. */
+  last: string;
+}
+
+/**
+ * What the practitioner has been caught with, most sessions first, then most recent, then by
+ * name. A name counts once a session, and the same name in another case is the same name.
+ */
+export function caughtTally(sessions: Session[]): CaughtEntry[] {
+  const entries = new Map<string, CaughtEntry>();
+  for (const session of sessions) {
+    for (const name of cleanCaught(session.caughtWith)) {
+      const key = name.toLowerCase();
+      const soFar = entries.get(key);
+      const newer = !soFar || session.date >= soFar.last;
+      entries.set(key, {
+        name: newer ? name : soFar.name,
+        sessions: (soFar?.sessions ?? 0) + 1,
+        last: newer ? session.date : soFar.last,
+      });
+    }
+  }
+  return [...entries.values()].sort(
+    (a, b) =>
+      b.sessions - a.sessions ||
+      b.last.localeCompare(a.last) ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  );
 }
