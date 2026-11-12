@@ -63,10 +63,15 @@ describes every feature and the rules behind it, and is kept current with the co
 
 ## Working with several agents
 
-- One agent writes; a different agent, given the diff and not the author's reasoning, reviews
-  before the change reaches `main`.
-- Parallel work is one branch and worktree per feature. Two agents never edit the same files at
-  once. `types.ts`, `parse.ts`, `backup.ts`, `App.tsx` and `App.test.tsx` are shared by almost
-  every feature, so features that add stored fields are done one after another, not in parallel.
+**Off for now, to save tokens (the owner's decision, 12 November 2026).** Do the work in one
+session: do not start subagents, parallel worktree sessions or separate review agents unless the
+owner asks for one in that conversation. Review your own change before it reaches `main`: read
+the whole diff again as a reviewer would, and say plainly that it has had no independent review.
+
 - A change is done when `npm run build` passes and it has been driven in a browser at phone
   width against `npm run preview`, not when the tests alone pass.
+- When several agents are in use again: one agent writes and a different one, given the diff and
+  not the author's reasoning, reviews before `main`. Parallel work is one branch and worktree per
+  feature, and two agents never edit the same files at once. `types.ts`, `parse.ts`, `backup.ts`,
+  `App.tsx` and `App.test.tsx` are shared by almost every feature, so features that add stored
+  fields are done one after another.
