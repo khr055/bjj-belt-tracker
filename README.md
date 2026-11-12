@@ -14,6 +14,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - See sessions and hours since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
+- See your time in grade against the IBJJF minimum for your belt (2 years at blue, 18 months at
+  purple, 1 year at brown) and the date you reach it.
 
 ## Backups
 
@@ -43,7 +45,7 @@ npm run dev
 | `npm run dev`       | Start the dev server on port 5173     |
 | `npm test`          | Run the test suite                    |
 | `npm run typecheck` | Type-check without building           |
-| `npm run build`     | Type-check and build into `dist/`     |
+| `npm run build`     | Type-check, test and build into `dist/` |
 | `npm run preview`   | Serve the built app from `dist/`      |
 | `npm run icons`     | Regenerate the app icons in `public/` |
 

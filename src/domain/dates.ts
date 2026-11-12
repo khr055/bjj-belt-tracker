@@ -75,6 +75,17 @@ export function calendarDiff(from: string, to: string): CalendarDiff {
   };
 }
 
+/** The date a number of whole months later, clamped to the month's length (31 Aug + 6 = 28 Feb). */
+export function addMonths(value: string, months: number): string {
+  const start = parseIsoDate(value);
+  if (!start) return value;
+  const monthIndex = start.month - 1 + months;
+  const year = start.year + Math.floor(monthIndex / 12);
+  const month = (((monthIndex % 12) + 12) % 12) + 1;
+  const day = Math.min(start.day, daysInMonth(year, month));
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 /** Compact duration such as "2 yr 3 mo", "5 mo 12 d" or "9 days". */
 export function formatDuration(from: string, to: string): string {
   const { years, months, days } = calendarDiff(from, to);

@@ -4,6 +4,7 @@ import { MatTimeStats } from './components/MatTimeStats';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
 import { SessionList } from './components/SessionList';
+import { TimeInGradeCard } from './components/TimeInGradeCard';
 import { TimelineView } from './components/TimelineView';
 import { todayIso } from './domain/dates';
 import { sessionDefaults } from './domain/sessions';
@@ -60,6 +61,9 @@ export default function App() {
               today={today}
               onSave={actions.setRank}
             />
+            {data.rank && (
+              <TimeInGradeCard rank={data.rank} promotions={data.promotions} today={today} />
+            )}
             <MatTimeStats data={data} />
             <section className="card" aria-labelledby="quick-log-heading">
               <h2 id="quick-log-heading">Log a session</h2>

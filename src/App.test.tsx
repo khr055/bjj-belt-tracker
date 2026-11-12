@@ -144,6 +144,43 @@ describe('App', () => {
   });
 });
 
+describe('Time in grade', () => {
+  it('shows when the IBJJF minimum at the current belt was met', () => {
+    seed({
+      rank: { belt: 'blue', stripes: 2 },
+      promotions: [{ id: 'blue', belt: 'blue', stripes: 0, date: '2020-01-01' }],
+      sessions: [],
+    });
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Time in grade' });
+    expect(card).toHaveTextContent('Minimum met.');
+    expect(card).toHaveTextContent('IBJJF requires 2 years, which you reached on 1 Jan 2022.');
+    expect(within(card).getByRole('progressbar')).toHaveValue(100);
+  });
+
+  it('asks for the belt promotion when the current belt has no logged date', () => {
+    seed({ rank: { belt: 'purple', stripes: 0 }, promotions: [], sessions: [] });
+    render(<App />);
+
+    expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
+      'IBJJF requires 18 months at purple belt. Log your promotion to purple belt',
+    );
+  });
+
+  it('says there is no minimum at white belt and stays hidden until a rank is set', () => {
+    const first = render(<App />);
+    expect(screen.queryByRole('region', { name: 'Time in grade' })).not.toBeInTheDocument();
+    first.unmount();
+
+    seed({ rank: { belt: 'white', stripes: 1 }, promotions: [], sessions: [] });
+    render(<App />);
+    expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
+      'IBJJF sets no minimum time at white belt before blue belt.',
+    );
+  });
+});
+
 describe('Backup and restore', () => {
   const HISTORY: AppData = {
     rank: { belt: 'blue', stripes: 1 },
