@@ -5,6 +5,7 @@
 // A new deploy is picked up in the background and shown the next time the app is opened.
 
 const CACHE_PREFIX = 'belt-tracker-';
+const RANK_FILES = '/ranks/';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -38,11 +39,20 @@ self.addEventListener('fetch', (event) => {
 
   // Every page load gets the app shell; everything else is looked up by its own URL.
   const key = request.mode === 'navigate' ? '/' : request;
+  // The icons and manifest for the current rank are not precached (there is a set per rank), so
+  // a copy is kept the first time each is fetched. They then work offline like everything else.
+  const keep = request.mode !== 'navigate' && new URL(request.url).pathname.startsWith(RANK_FILES);
   event.respondWith(
-    caches
-      .open(CACHE_NAME)
+    caches.open(CACHE_NAME).then((cache) =>
       // The precache is keyed by URL alone; a `Vary` header from the host must not cause misses.
-      .then((cache) => cache.match(key, { ignoreVary: true }))
-      .then((cached) => cached ?? fetch(request)),
+      cache.match(key, { ignoreVary: true }).then(
+        (cached) =>
+          cached ??
+          fetch(request).then((response) => {
+            if (keep && response.ok) event.waitUntil(cache.put(request, response.clone()));
+            return response;
+          }),
+      ),
+    ),
   );
 });

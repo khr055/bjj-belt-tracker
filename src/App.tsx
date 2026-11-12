@@ -21,6 +21,7 @@ import { caughtTally, sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
 import { TrendsCard } from './components/TrendsCard';
 import { useAppState } from './state/useAppState';
+import { useRankIcons } from './state/useRankIcons';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -34,6 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 export default function App() {
   const { data, saveFailed, actions } = useAppState();
+  useRankIcons(data.rank);
   const [tab, setTab] = useState<TabId>('overview');
   const today = todayIso();
   const timeline = buildTimeline(data.promotions, data.rank, today);

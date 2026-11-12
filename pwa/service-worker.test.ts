@@ -32,6 +32,29 @@ describe('buildServiceWorker', () => {
     expect(source.endsWith(TEMPLATE)).toBe(true);
   });
 
+  describe('with the icons and manifests for each rank', () => {
+    beforeEach(() => {
+      mkdirSync(join(outDir, 'ranks'));
+      for (const name of ['blue-2-180.png', 'blue-2-192.png', 'blue-2-512.png', 'blue-2.webmanifest', 'blue-2.svg']) {
+        writeFileSync(join(outDir, 'ranks', name), name);
+      }
+      writeFileSync(join(outDir, 'manifest.webmanifest'), '{}');
+    });
+
+    it('leaves them out of the precache, apart from the small tab icons', () => {
+      const source = buildServiceWorker(outDir, TEMPLATE);
+      expect(source).toContain(
+        'const PRECACHE_URLS = ["/assets/index-abc.js","/icon-192.png","/","/manifest.webmanifest","/ranks/blue-2.svg"];',
+      );
+    });
+
+    it('still changes the cache name when one of them changes', () => {
+      const before = cacheName(buildServiceWorker(outDir, TEMPLATE));
+      writeFileSync(join(outDir, 'ranks', 'blue-2-512.png'), 'new png');
+      expect(cacheName(buildServiceWorker(outDir, TEMPLATE))).not.toBe(before);
+    });
+  });
+
   it('leaves a previous sw.js out of the list and the cache name', () => {
     const before = buildServiceWorker(outDir, TEMPLATE);
     writeFileSync(join(outDir, 'sw.js'), before);

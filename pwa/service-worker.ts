@@ -13,9 +13,17 @@ function listFiles(dir: string, prefix = ''): string[] {
 }
 
 /**
+ * The home-screen icons and manifests for each rank (see scripts/generate-icons.mjs). There are
+ * over a hundred and a device only ever asks for its own rank's, so they are left out of the
+ * precache; the worker keeps a copy of each one it is asked for instead. The small tab icons
+ * (`.svg`) in the same folder are precached, so the tab icon is right offline at any rank.
+ */
+const FETCHED_WHEN_NEEDED = /^ranks\/.+\.(png|webmanifest)$/;
+
+/**
  * Builds the service worker source for a finished build: the template with a precache list of
- * every built file and a cache name derived from their contents (and the template's), so any
- * change gives a new cache.
+ * the built files and a cache name derived from the contents of every file (and the template's),
+ * so any change gives a new cache.
  */
 export function buildServiceWorker(outDir: string, template: string): string {
   const files = listFiles(outDir)
@@ -28,7 +36,9 @@ export function buildServiceWorker(outDir: string, template: string): string {
     hash.update(readFileSync(join(outDir, file)));
   }
 
-  const urls = files.map((file) => (file === 'index.html' ? '/' : `/${file}`));
+  const urls = files
+    .filter((file) => !FETCHED_WHEN_NEEDED.test(file))
+    .map((file) => (file === 'index.html' ? '/' : `/${file}`));
   return [
     `const CACHE_NAME = ${JSON.stringify(`belt-tracker-${hash.digest('hex').slice(0, 12)}`)};`,
     `const PRECACHE_URLS = ${JSON.stringify(urls)};`,

@@ -2,6 +2,7 @@
   "name": "BJJ Belt Tracker",
   "short_name": "Belt Tracker",
   "description": "Track your jiu-jitsu belt, promotions and mat time.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

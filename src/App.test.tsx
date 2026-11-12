@@ -2127,3 +2127,51 @@ describe('Training calendar', () => {
     );
   });
 });
+
+describe('App icons', () => {
+  function iconLinks() {
+    const href = (rel: string) =>
+      document.head.querySelector(`link[rel="${rel}"]`)?.getAttribute('href');
+    return [href('manifest'), href('apple-touch-icon'), href('icon')];
+  }
+
+  it('shows the current belt as the tab icon and the icon a new install would get', async () => {
+    // The links index.html declares; the test page has none of its own.
+    document.head.innerHTML =
+      '<link rel="manifest" href="/manifest.webmanifest" />' +
+      '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />' +
+      '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />';
+    try {
+      const user = userEvent.setup();
+      const first = render(<App />);
+      expect(iconLinks()).toEqual(['/manifest.webmanifest', '/apple-touch-icon.png', '/favicon.svg']);
+
+      await user.click(screen.getByRole('radio', { name: 'Blue' }));
+      await user.click(screen.getByRole('radio', { name: '2 stripes' }));
+      await user.click(screen.getByRole('button', { name: 'Save rank' }));
+      expect(iconLinks()).toEqual([
+        '/ranks/blue-2.webmanifest',
+        '/ranks/blue-2-180.png',
+        '/ranks/blue-2.svg',
+      ]);
+
+      await user.click(screen.getByRole('button', { name: 'Edit rank' }));
+      await user.click(screen.getByRole('radio', { name: 'Black' }));
+      await user.click(screen.getByRole('radio', { name: '6 degrees' }));
+      await user.click(screen.getByRole('button', { name: 'Save rank' }));
+      expect(iconLinks()).toEqual([
+        '/ranks/black-6.webmanifest',
+        '/ranks/black-6-180.png',
+        '/ranks/black-6.svg',
+      ]);
+
+      // Opening the app again with a rank already stored.
+      first.unmount();
+      document.head.querySelector('link[rel="icon"]')?.setAttribute('href', '/favicon.svg');
+      render(<App />);
+      expect(iconLinks()[2]).toBe('/ranks/black-6.svg');
+    } finally {
+      document.head.innerHTML = '';
+    }
+  });
+});

@@ -11,6 +11,29 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      // Point the three links above at the icons for the stored rank before anything loads, so
+      // the tab never shows the default first and an install made straight away gets the right
+      // icon. src/state/useRankIcons.ts keeps them current after that, and a test holds this
+      // copy of the file names to src/domain/rankIcons.ts. Stored data is untrusted: anything
+      // unexpected leaves the defaults in place.
+      (function () {
+        try {
+          var rank = JSON.parse(localStorage.getItem('bjj-belt-tracker:v1')).rank;
+          var most = { white: 4, blue: 4, purple: 4, brown: 4, black: 6 };
+          if (!Object.prototype.hasOwnProperty.call(most, rank.belt)) return;
+          if (!Number.isInteger(rank.stripes) || rank.stripes < 0 || rank.stripes > most[rank.belt]) return;
+          var base = '/ranks/' + rank.belt + '-' + rank.stripes;
+          var files = { manifest: '.webmanifest', 'apple-touch-icon': '-180.png', icon: '.svg' };
+          for (var rel in files) {
+            var link = document.head.querySelector('link[rel="' + rel + '"]');
+            if (link) link.setAttribute('href', base + files[rel]);
+          }
+        } catch (error) {
+          // No stored data, unreadable data or storage switched off: keep the default icons.
+        }
+      })();
+    </script>
     <title>BJJ Belt Tracker</title>
   </head>
   <body>

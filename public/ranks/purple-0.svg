@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <clipPath id="belt"><rect y="2" width="16" height="12" rx="2" /></clipPath>
+  <g clip-path="url(#belt)">
+    <rect y="2" width="16" height="12" fill="#6b3fa0" />
+    <rect x="7" y="2" width="9" height="12" fill="#111111" />
+  </g>
+  <rect x="0.5" y="2.5" width="15" height="11" rx="1.5" fill="none" stroke="#53307d" />
+</svg>

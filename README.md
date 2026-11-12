@@ -22,6 +22,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
   more on request.
 - See sessions, hours and rounds rolled this week, since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
+- The browser tab icon shows your current belt and stripes, and the home-screen icon matches your
+  rank when you install the app.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
   A backup can also be added to what is on a device, for logging on more than one.
 - See your time in grade against the IBJJF minimum for your belt (2 years at blue, 18 months at
@@ -178,6 +180,26 @@ visit it opens without a connection. A new deploy downloads in the background an
 next time the app is opened. The service worker is not used by `npm run dev`; to try it locally,
 run `npm run build` and then `npm run preview`.
 
+## Icons
+
+The tab icon follows your rank straight away: change your rank and the icon changes with it.
+
+The home-screen icon is chosen when you install the app. Set your rank first, then add the app
+to your home screen, and the icon is your belt.
+
+- On an iPhone or iPad the icon is fixed when you tap Add to Home Screen. It does not change
+  when you are promoted. To get the new belt, remove the app from the home screen and add it
+  again. Removing it can remove the data stored in it, so save a backup first and restore it
+  afterwards.
+- On Android and in desktop Chrome the browser checks the app's details from time to time and
+  may update the icon on its own schedule, sometimes after asking you. This can take days, and
+  the app cannot force it.
+
+Until a rank is set, the icon is a blue belt with two stripes. The icons for every rank are
+files in `public/ranks/`, written by `npm run icons`. Only the small tab icons are stored for
+offline use up front; the home-screen icons and manifest for your rank are stored the first
+time they are fetched.
+
 ## Development
 
 Requires Node 20 or later.
@@ -199,8 +221,9 @@ npm run dev
 ## Layout
 
 - `src/domain/` holds the rules (ranks, promotion ordering, timeline, mat-time totals, trends,
-  goals, competitions, techniques) as plain functions with their tests.
+  goals, competitions, techniques, time off, the calendar, merging backups) as plain functions
+  with their tests.
 - `src/state/` loads and saves the data.
 - `src/components/` holds the React UI.
 - `pwa/` holds the service worker and the build step that generates its file list.
-- `public/` holds the web app manifest and icons.
+- `public/` holds the web app manifests and icons, including a set per rank in `ranks/`.
