@@ -194,8 +194,9 @@ export function TimeOffCard({ timeOff, sessions, today, onAdd, onUpdate, onDelet
               onClick={() => {
                 const { id, ...rest } = period;
                 onUpdate(id, { ...rest, endDate: back.lastDayOff });
-                // An edit form left open would save its own, older, blank last day over this.
-                setMode(IDLE);
+                // This period's edit form, left open, would save its own blank last day over
+                // this. Any other form that is open is left alone, with what was typed in it.
+                if (mode.kind === 'edit' && mode.id === id) setMode(IDLE);
               }}
             >
               End it on {formatDate(back.lastDayOff)}

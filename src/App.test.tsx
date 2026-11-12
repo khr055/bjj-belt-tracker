@@ -1271,11 +1271,21 @@ describe('Time off: planned periods and older ones never ended', () => {
     expect(card).toHaveTextContent(
       `Your time off since ${formatDate(addDays(today, -60))} has no last day`,
     );
+    // A form open for something else keeps what was typed in it.
+    await user.click(within(card).getByRole('button', { name: 'Add time off' }));
+    await user.type(
+      within(within(card).getByRole('form', { name: 'Add time off' })).getByLabelText(/Notes/),
+      'Holiday',
+    );
     await user.click(
       within(card).getByRole('button', {
         name: `End time off from ${formatDate(addDays(today, -60))} on ${formatDate(addDays(today, -41))}`,
       }),
     );
+    expect(
+      within(within(card).getByRole('form', { name: 'Add time off' })).getByLabelText(/Notes/),
+    ).toHaveValue('Holiday');
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }));
     expect(stored().timeOff[0]).toMatchObject({ id: 'old', endDate: addDays(today, -41) });
     expect(stored().timeOff[1]).not.toHaveProperty('endDate');
     expect(card).not.toHaveTextContent('has no last day');
