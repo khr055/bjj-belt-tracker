@@ -917,6 +917,285 @@ describe('Techniques landed in rolling', () => {
   });
 });
 
+describe('Wins by a technique from the journal', () => {
+  const TRIANGLE: Technique = {
+    id: 't1',
+    name: 'Triangle',
+    position: 'guard',
+    status: 'landing',
+    addedOn: '2024-01-01',
+    statusSince: '2024-01-01',
+  };
+  const OPEN = { id: 'c1', date: '2024-10-19', name: 'Autumn Open', type: 'gi' as const };
+
+  it('picks the submission from the journal and shows the win on the technique', async () => {
+    seed({ techniques: [TRIANGLE], competitions: [{ ...OPEN, matches: [] }] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+
+    await user.click(screen.getByRole('button', { name: 'Add match to Autumn Open' }));
+    const form = screen.getByRole('form', { name: 'Add match' });
+    // The journal is offered only for a win by submission.
+    await user.click(within(form).getByRole('radio', { name: 'Loss' }));
+    await user.click(within(form).getByRole('radio', { name: 'Submission' }));
+    expect(within(form).queryByRole('combobox')).not.toBeInTheDocument();
+    await user.click(within(form).getByRole('radio', { name: 'Win' }));
+    const picker = within(form).getByRole('combobox', { name: /Technique from your journal/ });
+    expect(within(form).getByRole('textbox', { name: /Submission/ })).toBeInTheDocument();
+    await user.selectOptions(picker, 'Triangle');
+    // Choosing from the journal takes the place of typing the submission in.
+    expect(within(form).queryByRole('textbox', { name: /Submission/ })).not.toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Save match' }));
+
+    expect(stored().competitions[0].matches[0]).toMatchObject({
+      result: 'win',
+      method: 'submission',
+      techniqueId: 't1',
+    });
+    expect(screen.getByRole('list', { name: 'Matches at Autumn Open' })).toHaveTextContent(
+      'Win by submission (Triangle)',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    expect(screen.getByRole('list', { name: 'Guard' })).toHaveTextContent(
+      'Won 1 match in competition',
+    );
+  });
+
+  it('keeps the name on the match when the technique is deleted', async () => {
+    seed({
+      techniques: [TRIANGLE],
+      competitions: [
+        { ...OPEN, matches: [{ id: 'm1', result: 'win', method: 'submission', techniqueId: 't1' }] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Triangle' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm delete Triangle' }));
+
+    expect(stored().competitions[0].matches[0]).toEqual({
+      id: 'm1',
+      result: 'win',
+      method: 'submission',
+      submission: 'Triangle',
+    });
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    expect(screen.getByRole('list', { name: 'Matches at Autumn Open' })).toHaveTextContent(
+      'Win by submission (Triangle)',
+    );
+  });
+
+  it('types the submission in when the journal is empty', async () => {
+    seed({ competitions: [{ ...OPEN, matches: [] }] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    await user.click(screen.getByRole('button', { name: 'Add match to Autumn Open' }));
+    const form = screen.getByRole('form', { name: 'Add match' });
+    await user.click(within(form).getByRole('radio', { name: 'Win' }));
+    await user.click(within(form).getByRole('radio', { name: 'Submission' }));
+    expect(within(form).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(form).getByRole('textbox', { name: /Submission/ })).toBeInTheDocument();
+  });
+});
+
+describe('Time off', () => {
+  it('carries the streak across weeks off and leaves them out of the average and goal', async () => {
+    const thisWeek = weekStart(todayIso());
+    seed({
+      weeklyGoal: 2,
+      sessions: [
+        { id: 's1', date: thisWeek, durationMinutes: 60, type: 'gi' },
+        { id: 's2', date: addDays(thisWeek, -21), durationMinutes: 60, type: 'gi' },
+        { id: 's3', date: addDays(thisWeek, -20), durationMinutes: 60, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    // Two missed weeks end the streak and count against the average and the goal.
+    const streak = screen.getByRole('group', { name: 'Current streak' });
+    const average = screen.getByRole('group', { name: 'Weekly average' });
+    const goal = screen.getByRole('group', { name: "This week's goal" });
+    expect(streak).toHaveTextContent('1 week');
+    expect(average).toHaveTextContent('0.7 sessions');
+    expect(average).toHaveTextContent('Over the last 3 full weeks');
+    expect(goal).toHaveTextContent('Reached in 1 of the last 3 full weeks');
+
+    const card = screen.getByRole('region', { name: 'Time off' });
+    expect(card).toHaveTextContent("those weeks won't break your streak");
+    await user.click(within(card).getByRole('button', { name: 'Add time off' }));
+    const form = within(card).getByRole('form', { name: 'Add time off' });
+    fireEvent.change(within(form).getByLabelText('First day off'), {
+      target: { value: addDays(thisWeek, -14) },
+    });
+    fireEvent.change(within(form).getByLabelText(/Last day off/), {
+      target: { value: addDays(thisWeek, -1) },
+    });
+    await user.click(within(form).getByRole('radio', { name: 'Travel' }));
+    await user.type(within(form).getByLabelText(/Notes/), 'Two weeks away');
+    await user.click(within(form).getByRole('button', { name: 'Save time off' }));
+
+    expect(stored().timeOff).toEqual([
+      {
+        id: stored().timeOff[0].id,
+        startDate: addDays(thisWeek, -14),
+        endDate: addDays(thisWeek, -1),
+        reason: 'travel',
+        notes: 'Two weeks away',
+      },
+    ]);
+    const list = within(card).getByRole('list', { name: 'Time off' });
+    expect(list).toHaveTextContent(
+      `${formatDate(addDays(thisWeek, -14))} to ${formatDate(addDays(thisWeek, -1))}`,
+    );
+    expect(list).toHaveTextContent('Travel');
+    expect(list).toHaveTextContent('Two weeks away');
+
+    expect(streak).toHaveTextContent('2 weeks');
+    expect(streak).toHaveTextContent('Including this week · Not counting 2 weeks off');
+    expect(average).toHaveTextContent('2.0 sessions');
+    expect(average).toHaveTextContent('Over the last 1 full week');
+    expect(goal).toHaveTextContent('Reached in 1 of the last 1 full week');
+
+    const chart = screen.getByRole('group', { name: 'Sessions per week, last 8 weeks' });
+    const bars = within(chart).getAllByRole('img');
+    expect(bars[6]).toHaveAccessibleName(
+      `Week of ${formatShortDate(addDays(thisWeek, -7))}, time off: 0 sessions, 0 hours`,
+    );
+    expect(chart).toHaveTextContent(
+      'Shaded weeks include time off and are left out of your average and goal record.',
+    );
+  });
+
+  it('holds the streak during time off that is still going on, until it is ended or deleted', async () => {
+    const thisWeek = weekStart(todayIso());
+    seed({
+      sessions: [{ id: 's1', date: addDays(thisWeek, -14), durationMinutes: 60, type: 'gi' }],
+      timeOff: [{ id: 'o1', startDate: addDays(thisWeek, -10), reason: 'injury' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const streak = screen.getByRole('group', { name: 'Current streak' });
+    expect(streak).toHaveTextContent('1 week');
+    expect(streak).toHaveTextContent('Held while you are off');
+    const card = screen.getByRole('region', { name: 'Time off' });
+    expect(card).toHaveTextContent('You are on time off (injury)');
+    expect(card).toHaveTextContent(`Since ${formatDate(addDays(thisWeek, -10))}`);
+    expect(card).toHaveTextContent('Ongoing');
+
+    // A last day before the first is refused.
+    const label = `time off from ${formatDate(addDays(thisWeek, -10))}`;
+    await user.click(within(card).getByRole('button', { name: `Edit ${label}` }));
+    const form = within(card).getByRole('form', { name: 'Edit time off' });
+    fireEvent.change(within(form).getByLabelText(/Last day off/), {
+      target: { value: addDays(thisWeek, -11) },
+    });
+    fireEvent.submit(form);
+    expect(within(form).getByRole('alert')).toHaveTextContent("can't be before the first");
+    await user.click(within(form).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(within(card).getByRole('button', { name: `Delete ${label}` }));
+    await user.click(within(card).getByRole('button', { name: `Confirm delete ${label}` }));
+    expect(stored().timeOff).toEqual([]);
+    expect(streak).toHaveTextContent('0 weeks');
+    expect(streak).toHaveTextContent('Train this week to start one');
+  });
+});
+
+describe('Black belt degrees', () => {
+  it('sets a black belt rank in degrees, beyond the four a coloured belt holds', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('radio', { name: 'Brown' }));
+    expect(screen.getByRole('group', { name: 'Stripes' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: '5 stripes' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Black' }));
+    const degrees = screen.getByRole('group', { name: 'Degrees' });
+    expect(within(degrees).getAllByRole('radio')).toHaveLength(7);
+    await user.click(within(degrees).getByRole('radio', { name: '5 degrees' }));
+    // Going back to a coloured belt brings the count down to what it can hold.
+    await user.click(screen.getByRole('radio', { name: 'Brown' }));
+    expect(screen.getByRole('radio', { name: '4 stripes' })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'Black' }));
+    await user.click(screen.getByRole('radio', { name: '5 degrees' }));
+    await user.click(screen.getByRole('button', { name: 'Save rank' }));
+
+    expect(screen.getByRole('heading', { name: 'Black belt, 5th degree' })).toBeInTheDocument();
+    expect(stored().rank).toEqual({ belt: 'black', stripes: 5 });
+    expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
+      'IBJJF requires 5 years at the 5th degree before the 6th degree. Log your promotion to the 5th degree',
+    );
+  });
+
+  it('shows the time served towards the next degree', () => {
+    seed({
+      rank: { belt: 'black', stripes: 1 },
+      promotions: [
+        { id: 'black', belt: 'black', stripes: 0, date: '2015-01-01' },
+        { id: 'black-1', belt: 'black', stripes: 1, date: '2018-03-01' },
+      ],
+    });
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Time in grade' });
+    expect(card).toHaveTextContent('Minimum met.');
+    expect(card).toHaveTextContent(
+      'IBJJF requires 3 years before the 2nd degree, which you reached on 1 Mar 2021.',
+    );
+    expect(within(card).getByRole('progressbar')).toHaveValue(100);
+  });
+
+  it('counts three years at black belt towards the 1st degree, and stops at the 6th', () => {
+    const today = todayIso();
+    seed({
+      rank: { belt: 'black', stripes: 0 },
+      promotions: [{ id: 'black', belt: 'black', stripes: 0, date: addDays(today, -365) }],
+    });
+    const first = render(<App />);
+    expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
+      /of the 3 years IBJJF requires at black belt before the 1st degree/,
+    );
+    first.unmount();
+
+    seed({ rank: { belt: 'black', stripes: 6 } });
+    render(<App />);
+    expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
+      "The 7th degree is the coral belt, which this app doesn't track.",
+    );
+  });
+
+  it('logs a degree on the timeline', async () => {
+    seed({
+      rank: { belt: 'black', stripes: 0 },
+      promotions: [{ id: 'black', belt: 'black', stripes: 0, date: '2020-01-01' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Timeline' }));
+    await user.click(screen.getByRole('button', { name: 'Log promotion' }));
+    const form = screen.getByRole('form', { name: 'Log promotion' });
+    // The next degree is suggested.
+    expect(within(form).getByRole('radio', { name: '1 degree' })).toBeChecked();
+    fireEvent.change(within(form).getByLabelText('Promotion date'), {
+      target: { value: '2023-02-01' },
+    });
+    await user.click(within(form).getByRole('button', { name: 'Save promotion' }));
+
+    expect(screen.getByRole('region', { name: 'Promotions' })).toHaveTextContent(
+      'Black belt, 1st degree',
+    );
+    expect(stored().rank).toEqual({ belt: 'black', stripes: 1 });
+  });
+});
+
 describe('Long session lists', () => {
   it('shows the most recent 30 sessions and more on request', async () => {
     const sessions: Session[] = Array.from({ length: 35 }, (_, index) => ({

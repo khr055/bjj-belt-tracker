@@ -13,7 +13,9 @@ import {
   MAX_MATCHES,
   nextCompetition,
   pastCompetitions,
+  competitionWins,
   sortCompetitions,
+  submissionName,
   tally,
   updateCompetition,
   updateMatch,
@@ -21,7 +23,14 @@ import {
   type CompetitionInput,
   type MatchInput,
 } from './competitions';
-import { emptyData, type AppData, type Competition, type Result } from './types';
+import { deleteTechnique } from './techniques';
+import {
+  emptyData,
+  type AppData,
+  type Competition,
+  type Result,
+  type Technique,
+} from './types';
 
 const TODAY = '2026-11-11';
 const OPEN: CompetitionInput = { name: 'Autumn Open', date: '2026-10-17', type: 'gi' };
@@ -295,5 +304,83 @@ describe('competitionRecord', () => {
 
   it('tallies one competition on its own', () => {
     expect(tally(competitions[1].matches)).toEqual({ wins: 1, losses: 1, draws: 0 });
+  });
+});
+
+describe('a win by a technique from the journal', () => {
+  const TRIANGLE: Technique = {
+    id: 't1',
+    name: 'Triangle',
+    position: 'guard',
+    status: 'landing',
+    addedOn: '2026-01-01',
+    statusSince: '2026-01-01',
+  };
+  const start = withCompetition();
+  const data: AppData = { ...start.data, techniques: [TRIANGLE] };
+  const { id } = start;
+  const matchesOf = (from: AppData) => from.competitions[0].matches;
+
+  it('names the technique in place of words typed in', () => {
+    const won = must(
+      add(data, id, {
+        result: 'win',
+        method: 'submission',
+        techniqueId: 't1',
+        submission: 'triangle from guard',
+      }),
+    );
+    const [match] = matchesOf(won);
+    expect(match).toEqual({ id: match.id, result: 'win', method: 'submission', techniqueId: 't1' });
+    expect(submissionName(match, won.techniques)).toBe('Triangle');
+    expect(describeMatch(match, won.techniques)).toBe('Win by submission (Triangle)');
+    expect(competitionWins(won.competitions)).toEqual(new Map([['t1', 1]]));
+  });
+
+  it('follows the technique when it is renamed', () => {
+    const won = must(add(data, id, { result: 'win', method: 'submission', techniqueId: 't1' }));
+    const renamed = [{ ...TRIANGLE, name: 'Triangle choke' }];
+    expect(describeMatch(matchesOf(won)[0], renamed)).toBe('Win by submission (Triangle choke)');
+  });
+
+  it('links only a win by submission, and only a technique in the journal', () => {
+    const cases = [
+      { result: 'loss', method: 'submission', techniqueId: 't1', submission: 'Armbar' },
+      { result: 'win', method: 'points', techniqueId: 't1' },
+      { result: 'draw', techniqueId: 't1' },
+      { result: 'win', method: 'submission', techniqueId: 'gone', submission: 'Armbar' },
+    ] as const;
+    let logged = data;
+    for (const input of cases) logged = must(add(logged, id, input));
+    const matches = matchesOf(logged);
+    for (const match of matches) expect(match).not.toHaveProperty('techniqueId');
+    // What was typed in is kept where the link was not.
+    expect(matches[0].submission).toBe('Armbar');
+    expect(matches[3].submission).toBe('Armbar');
+    expect(competitionWins(logged.competitions).size).toBe(0);
+  });
+
+  it('can be changed to words, or to another result, when the match is edited', () => {
+    const won = must(add(data, id, { result: 'win', method: 'submission', techniqueId: 't1' }));
+    const matchId = matchesOf(won)[0].id;
+    const typed = must(
+      updateMatch(won, id, matchId, { result: 'win', method: 'submission', submission: 'Armbar' }),
+    );
+    expect(matchesOf(typed)[0]).toEqual({
+      id: matchId,
+      result: 'win',
+      method: 'submission',
+      submission: 'Armbar',
+    });
+  });
+
+  it('keeps the name, as words, when the technique is deleted', () => {
+    let won = must(add(data, id, { result: 'win', method: 'submission', techniqueId: 't1' }));
+    won = must(add(won, id, { result: 'win', method: 'points' }));
+    const after = deleteTechnique(won, 't1');
+    const [first, second] = matchesOf(after);
+    expect(first).toEqual({ id: first.id, result: 'win', method: 'submission', submission: 'Triangle' });
+    expect(second).toEqual(matchesOf(won)[1]);
+    expect(describeMatch(first, after.techniques)).toBe('Win by submission (Triangle)');
   });
 });

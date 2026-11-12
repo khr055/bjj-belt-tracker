@@ -1,16 +1,18 @@
 import { useId } from 'react';
-import { BELT_LABELS } from '../domain/rank';
-import { BELTS, MAX_STRIPES, type Rank } from '../domain/types';
+import { BELT_LABELS, maxStripes } from '../domain/rank';
+import { BELTS, type Rank } from '../domain/types';
 
 interface Props {
   value: Rank;
   onChange(rank: Rank): void;
 }
 
-const STRIPE_COUNTS = Array.from({ length: MAX_STRIPES + 1 }, (_, index) => index);
-
 export function RankPicker({ value, onChange }: Props) {
   const name = useId();
+  // A black belt holds degrees, and more of them than a coloured belt holds stripes.
+  const black = value.belt === 'black';
+  const unit = black ? 'degree' : 'stripe';
+  const counts = Array.from({ length: maxStripes(value.belt) + 1 }, (_, index) => index);
   return (
     <>
       <fieldset className="choices">
@@ -22,7 +24,10 @@ export function RankPicker({ value, onChange }: Props) {
                 type="radio"
                 name={`${name}-belt`}
                 checked={value.belt === belt}
-                onChange={() => onChange({ ...value, belt })}
+                // Stripes a new belt cannot hold are brought down to the most it can.
+                onChange={() =>
+                  onChange({ belt, stripes: Math.min(value.stripes, maxStripes(belt)) })
+                }
               />
               <span className={`chip__swatch chip__swatch--${belt}`} aria-hidden="true" />
               {BELT_LABELS[belt]}
@@ -31,14 +36,14 @@ export function RankPicker({ value, onChange }: Props) {
         </div>
       </fieldset>
       <fieldset className="choices">
-        <legend>Stripes</legend>
+        <legend>{black ? 'Degrees' : 'Stripes'}</legend>
         <div className="choices__row">
-          {STRIPE_COUNTS.map((stripes) => (
+          {counts.map((stripes) => (
             <label key={stripes} className="chip chip--number">
               <input
                 type="radio"
                 name={`${name}-stripes`}
-                aria-label={stripes === 1 ? '1 stripe' : `${stripes} stripes`}
+                aria-label={stripes === 1 ? `1 ${unit}` : `${stripes} ${unit}s`}
                 checked={value.stripes === stripes}
                 onChange={() => onChange({ ...value, stripes })}
               />

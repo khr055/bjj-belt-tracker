@@ -11,6 +11,7 @@ import { SessionList } from './components/SessionList';
 import { TechniqueFocusCard } from './components/TechniqueFocusCard';
 import { TechniquesView } from './components/TechniquesView';
 import { TimeInGradeCard } from './components/TimeInGradeCard';
+import { TimeOffCard } from './components/TimeOffCard';
 import { TimelineView } from './components/TimelineView';
 import { nextCompetition, pastCompetitions } from './domain/competitions';
 import { todayIso } from './domain/dates';
@@ -124,9 +125,17 @@ export default function App() {
             </section>
             <TrendsCard
               sessions={data.sessions}
+              timeOff={data.timeOff}
               weeklyGoal={data.weeklyGoal}
               today={today}
               onSetGoal={actions.setWeeklyGoal}
+            />
+            <TimeOffCard
+              timeOff={data.timeOff}
+              today={today}
+              onAdd={actions.addTimeOff}
+              onUpdate={actions.updateTimeOff}
+              onDelete={actions.deleteTimeOff}
             />
             <section className="card" aria-labelledby="sessions-heading">
               <h2 id="sessions-heading">Sessions</h2>
@@ -145,6 +154,7 @@ export default function App() {
           <TechniquesView
             techniques={data.techniques}
             sessions={data.sessions}
+            competitions={data.competitions}
             today={today}
             onAdd={(input) => actions.addTechnique(input, today)}
             onUpdate={(id, input) => actions.updateTechnique(id, input, today)}
@@ -156,6 +166,7 @@ export default function App() {
         {tab === 'compete' && (
           <CompetitionsView
             competitions={data.competitions}
+            techniques={data.techniques}
             today={today}
             onAdd={(input) => actions.addCompetition(input, today)}
             onUpdate={(id, input) => actions.updateCompetition(id, input, today)}

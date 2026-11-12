@@ -14,7 +14,7 @@ import {
 } from '../domain/competitions';
 import { formatDate } from '../domain/dates';
 import { SESSION_TYPE_LABELS } from '../domain/sessions';
-import type { Competition } from '../domain/types';
+import type { Competition, Technique } from '../domain/types';
 import { CompetitionForm } from './CompetitionForm';
 import { CompetitionRecordCard } from './CompetitionRecordCard';
 import { ConfirmDelete } from './ConfirmDelete';
@@ -22,6 +22,8 @@ import { MatchForm } from './MatchForm';
 
 interface Props {
   competitions: Competition[];
+  /** The journal, so a win by submission can name the technique it was won with. */
+  techniques: Technique[];
   today: string;
   onAdd(input: CompetitionInput): string | null;
   onUpdate(id: string, input: CompetitionInput): string | null;
@@ -54,6 +56,7 @@ export function competitionDetails(competition: Competition): string {
 
 export function CompetitionsView({
   competitions,
+  techniques,
   today,
   onAdd,
   onUpdate,
@@ -114,6 +117,7 @@ export function CompetitionsView({
                 return (
                   <li key={match.id} className="matches__item matches__item--editing">
                     <MatchForm
+techniques={techniques}
                       initial={match}
                       label={matchLabel}
                       onSubmit={(input) => closeOnSuccess(onUpdateMatch(id, match.id, input))}
@@ -132,7 +136,7 @@ export function CompetitionsView({
                     {index + 1}
                   </span>
                   <div className="list__main">
-                    <span className="list__detail">{describeMatch(match)}</span>
+                    <span className="list__detail">{describeMatch(match, techniques)}</span>
                     {match.opponent && (
                       <span className="muted list__detail">vs {match.opponent}</span>
                     )}
@@ -155,6 +159,7 @@ export function CompetitionsView({
 
         {addingMatch ? (
           <MatchForm
+techniques={techniques}
             label={`match ${matches.length + 1} at ${name}`}
             onSubmit={(input) => closeOnSuccess(onAddMatch(id, input))}
             onCancel={() => setMode(IDLE)}

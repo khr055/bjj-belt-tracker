@@ -1,5 +1,5 @@
 import { formatDate, isIsoDate } from './dates';
-import { formatRank, isValidRank, rankValue } from './rank';
+import { formatRank, INVALID_RANK, isValidRank, rankValue } from './rank';
 import { newId, type AppData, type Promotion, type Rank, type Result } from './types';
 
 export type PromotionInput = Omit<Promotion, 'id'>;
@@ -27,7 +27,7 @@ export function validatePromotion(
   others: Promotion[],
   today: string,
 ): string | null {
-  if (!isValidRank(input)) return 'Choose a belt and between 0 and 4 stripes.';
+  if (!isValidRank(input)) return INVALID_RANK;
   if (!isIsoDate(input.date)) return 'Enter a valid promotion date.';
   if (input.date > today) return "A promotion can't be dated in the future.";
 
@@ -113,7 +113,7 @@ export function deletePromotion(data: AppData, id: string): AppData {
 
 export function setRank(data: AppData, rank: Rank): Result<AppData> {
   if (!isValidRank(rank)) {
-    return { ok: false, error: 'Choose a belt and between 0 and 4 stripes.' };
+    return { ok: false, error: INVALID_RANK };
   }
   const top = highestPromotion(data.promotions);
   if (top && rankValue(rank) < rankValue(top)) {

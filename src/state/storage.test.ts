@@ -43,6 +43,7 @@ describe('storage', () => {
       techniques: [
         { id: 't1', name: 'Heel hook', position: 'legs', status: 'learning', addedOn: '2024-01-15', statusSince: '2024-01-20' },
       ],
+      timeOff: [{ id: 'o1', startDate: '2024-02-10', reason: 'travel' }],
     };
     expect(saveData(data)).toBe(true);
     expect(loadData()).toEqual(data);

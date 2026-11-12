@@ -33,6 +33,10 @@ function describe(data: AppData): string {
     count(data.sessions.length, 'session'),
     count(data.competitions.length, 'competition'),
     count(data.techniques.length, 'technique'),
+    // Left out when there is none, as most people have none to speak of.
+    ...(data.timeOff.length > 0
+      ? [`${data.timeOff.length} ${data.timeOff.length === 1 ? 'period' : 'periods'} of time off`]
+      : []),
   ].join(' · ');
 }
 
@@ -43,6 +47,7 @@ function isEmpty(data: AppData): boolean {
     data.sessions.length === 0 &&
     data.competitions.length === 0 &&
     data.techniques.length === 0 &&
+    data.timeOff.length === 0 &&
     data.weeklyGoal === null
   );
 }

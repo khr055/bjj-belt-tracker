@@ -1,11 +1,10 @@
 import { addMonths, daysBetween } from './dates';
 import { sortPromotions } from './promotions';
-import { BELTS, type Belt, type Promotion, type Rank } from './types';
+import { BELTS, MAX_DEGREES, type Belt, type Promotion, type Rank } from './types';
 
 /**
  * Minimum time IBJJF requires at each adult belt before the next one (General System of
- * Graduation). White belt has no minimum. Black belt degrees have their own schedule, which
- * the app does not model.
+ * Graduation). White belt has no minimum. Black belt degrees have their own schedule, below.
  */
 export const MINIMUM_MONTHS: Partial<Record<Belt, number>> = {
   blue: 24,
@@ -70,5 +69,64 @@ export function timeInGrade(
     eligibleOn,
     progress: met ? 1 : daysBetween(since, today) / daysBetween(since, eligibleOn),
     approximate: first.stripes > 0,
+  };
+}
+
+/**
+ * Minimum time IBJJF requires at each black belt degree before the next, by the degree held:
+ * three years each up to the 3rd degree, then five years each up to the 6th.
+ */
+export const DEGREE_MONTHS = [36, 36, 36, 60, 60, 60] as const;
+
+/** "3 years" or "5 years". */
+export function formatYears(months: number): string {
+  const years = months / 12;
+  return `${years} ${years === 1 ? 'year' : 'years'}`;
+}
+
+export type TimeInDegree =
+  /** 6th degree: the next is the coral belt, which the app does not model. */
+  | { status: 'top-degree'; degree: number }
+  /** The promotion to the current degree has not been logged, so there is no start date. */
+  | { status: 'start-unknown'; degree: number; nextDegree: number; requiredMonths: number }
+  | {
+      status: 'serving' | 'met';
+      degree: number;
+      nextDegree: number;
+      requiredMonths: number;
+      /** The day the current degree, or the black belt itself, was awarded. */
+      since: string;
+      /** First day the minimum is satisfied. */
+      eligibleOn: string;
+      /** Share of the minimum served so far, from 0 to 1. */
+      progress: number;
+    };
+
+/** Progress towards the next black belt degree, or null below black belt. */
+export function timeInDegree(
+  rank: Rank,
+  promotions: Promotion[],
+  today: string,
+): TimeInDegree | null {
+  if (rank.belt !== 'black') return null;
+  const degree = rank.stripes;
+  if (degree >= MAX_DEGREES) return { status: 'top-degree', degree };
+
+  const nextDegree = degree + 1;
+  const requiredMonths = DEGREE_MONTHS[degree];
+  const awarded = promotions.find((p) => p.belt === 'black' && p.stripes === degree);
+  if (!awarded) return { status: 'start-unknown', degree, nextDegree, requiredMonths };
+
+  const since = awarded.date;
+  const eligibleOn = addMonths(since, requiredMonths);
+  const met = today >= eligibleOn;
+  return {
+    status: met ? 'met' : 'serving',
+    degree,
+    nextDegree,
+    requiredMonths,
+    since,
+    eligibleOn,
+    progress: met ? 1 : daysBetween(since, today) / daysBetween(since, eligibleOn),
   };
 }

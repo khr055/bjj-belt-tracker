@@ -1,6 +1,6 @@
 import { weekStart } from './dates';
 import { finishedWeeks, TREND_WEEKS } from './trends';
-import type { AppData, Result, Session } from './types';
+import type { AppData, Result, Session, TimeOff } from './types';
 
 export const MAX_WEEKLY_GOAL = 7;
 
@@ -37,14 +37,18 @@ export interface GoalRecord {
   weeks: number;
 }
 
-/** How often the goal was reached over the finished weeks in the trend window. */
+/**
+ * How often the goal was reached over the finished weeks in the trend window, leaving out weeks
+ * with time off.
+ */
 export function goalRecord(
   sessions: Session[],
   goal: number,
   today: string,
   weeks: number = TREND_WEEKS,
+  timeOff: TimeOff[] = [],
 ): GoalRecord | null {
-  const finished = finishedWeeks(sessions, today, weeks);
+  const finished = finishedWeeks(sessions, today, weeks, timeOff);
   if (finished.length === 0) return null;
   return { met: finished.filter((week) => week.sessions >= goal).length, weeks: finished.length };
 }

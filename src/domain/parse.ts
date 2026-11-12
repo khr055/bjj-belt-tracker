@@ -11,6 +11,7 @@ import {
   MAX_SESSION_TECHNIQUES,
 } from './sessions';
 import { MAX_TECHNIQUE_NAME_LENGTH, MAX_TECHNIQUES } from './techniques';
+import { MAX_TIME_OFF } from './timeOff';
 import {
   emptyData,
   MATCH_METHODS,
@@ -20,6 +21,7 @@ import {
   SESSION_KINDS,
   SESSION_TYPES,
   TECHNIQUE_STATUSES,
+  TIME_OFF_REASONS,
   type AppData,
   type Competition,
   type Match,
@@ -34,6 +36,8 @@ import {
   type SessionType,
   type Technique,
   type TechniqueStatus,
+  type TimeOff,
+  type TimeOffReason,
 } from './types';
 
 type Loose = Record<string, unknown>;
@@ -120,7 +124,24 @@ function toSession(value: unknown, techniques: Technique[]): Session | null {
   };
 }
 
-function toMatch(value: unknown): Match | null {
+function toTimeOff(value: unknown): TimeOff | null {
+  if (!isObject(value) || typeof value.id !== 'string' || !isIsoDate(value.startDate)) return null;
+  if (!TIME_OFF_REASONS.includes(value.reason as TimeOffReason)) return null;
+  // A last day that cannot be right is dropped, which leaves the time off still going on.
+  const endDate =
+    isIsoDate(value.endDate) && value.endDate >= value.startDate ? value.endDate : undefined;
+  const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
+  return {
+    id: value.id,
+    startDate: value.startDate,
+    ...(endDate ? { endDate } : {}),
+    reason: value.reason as TimeOffReason,
+    ...(notes ? { notes } : {}),
+  };
+}
+
+/** A link to a technique that is not in the journal is dropped; the match is kept. */
+function toMatch(value: unknown, techniques: Technique[]): Match | null {
   if (!isObject(value) || typeof value.id !== 'string') return null;
   if (!MATCH_RESULTS.includes(value.result as MatchResult)) return null;
   const result = value.result as MatchResult;
@@ -130,14 +151,23 @@ function toMatch(value: unknown): Match | null {
   }
   if (!MATCH_METHODS.includes(value.method as MatchMethod)) return null;
   const method = value.method as MatchMethod;
+  const techniqueId =
+    result === 'win' &&
+    method === 'submission' &&
+    techniques.some((technique) => technique.id === value.techniqueId)
+      ? (value.techniqueId as string)
+      : undefined;
   const submission =
-    method === 'submission' ? optionalText(value.submission, MAX_SUBMISSION_LENGTH) : undefined;
+    method === 'submission' && !techniqueId
+      ? optionalText(value.submission, MAX_SUBMISSION_LENGTH)
+      : undefined;
   const opponent = optionalText(value.opponent, MAX_NAME_LENGTH);
   return {
     id: value.id,
     result,
     method,
     ...(submission ? { submission } : {}),
+    ...(techniqueId ? { techniqueId } : {}),
     ...(opponent ? { opponent } : {}),
   };
 }
@@ -160,14 +190,17 @@ function compact<T extends { id: string }>(
   return { kept, skipped: items.length - kept.length };
 }
 
-function toCompetition(value: unknown): { competition: Competition; skippedMatches: number } | null {
+function toCompetition(
+  value: unknown,
+  techniques: Technique[],
+): { competition: Competition; skippedMatches: number } | null {
   if (!isObject(value) || typeof value.id !== 'string' || !isIsoDate(value.date)) return null;
   const name = optionalText(value.name, MAX_NAME_LENGTH);
   if (!name || !SESSION_TYPES.includes(value.type as SessionType)) return null;
   const division = optionalText(value.division, MAX_NAME_LENGTH);
   const medal = MEDALS.includes(value.medal as Medal) ? (value.medal as Medal) : undefined;
   const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
-  const matches = compact(value.matches, toMatch);
+  const matches = compact(value.matches, (match) => toMatch(match, techniques));
   const kept = matches.kept.slice(0, MAX_MATCHES);
   return {
     competition: {
@@ -212,11 +245,15 @@ export function parseDataWithReport(raw: unknown): ParseReport {
 
   let skippedMatches = 0;
   const competitions = compact(raw.competitions, (value) => {
-    const converted = toCompetition(value);
+    const converted = toCompetition(value, techniques);
     if (!converted) return null;
     skippedMatches += converted.skippedMatches;
     return converted.competition;
   });
+
+  const parsedTimeOff = compact(raw.timeOff, toTimeOff);
+  const timeOff = parsedTimeOff.kept.slice(0, MAX_TIME_OFF);
+  const skippedTimeOff = parsedTimeOff.skipped + (parsedTimeOff.kept.length - timeOff.length);
 
   let rank: Rank | null =
     isObject(raw.rank) && isValidRank(raw.rank)
@@ -234,13 +271,15 @@ export function parseDataWithReport(raw: unknown): ParseReport {
       weeklyGoal: isValidGoal(raw.weeklyGoal) ? raw.weeklyGoal : null,
       competitions: competitions.kept,
       techniques,
+      timeOff,
     },
     skipped:
       promotions.skipped +
       sessions.skipped +
       competitions.skipped +
       skippedMatches +
-      skippedTechniques,
+      skippedTechniques +
+      skippedTimeOff,
   };
 }
 

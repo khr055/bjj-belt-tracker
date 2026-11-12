@@ -25,6 +25,7 @@ import {
   updateTechnique,
   type TechniqueInput,
 } from '../domain/techniques';
+import { addTimeOff, deleteTimeOff, updateTimeOff, type TimeOffInput } from '../domain/timeOff';
 import type { AppData, Rank, Result, TechniqueStatus } from '../domain/types';
 import { loadData, saveData } from './storage';
 
@@ -48,8 +49,11 @@ export interface AppActions {
   addTechnique(input: TechniqueInput, today: string): string | null;
   updateTechnique(id: string, input: TechniqueInput, today: string): string | null;
   setTechniqueStatus(id: string, status: TechniqueStatus, today: string): string | null;
-  /** Also takes the technique off the sessions it was ticked on. */
+  /** Also takes the technique off the sessions and competition matches it was named on. */
   deleteTechnique(id: string): void;
+  addTimeOff(input: TimeOffInput): string | null;
+  updateTimeOff(id: string, input: TimeOffInput): string | null;
+  deleteTimeOff(id: string): void;
   /** Swaps in a whole data set, e.g. from a backup file. */
   replaceData(data: AppData): void;
 }
@@ -89,6 +93,9 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
     updateTechnique: (id, input, today) => apply(updateTechnique(data, id, input, today)),
     setTechniqueStatus: (id, status, today) => apply(setTechniqueStatus(data, id, status, today)),
     deleteTechnique: (id) => commit(deleteTechnique(data, id)),
+    addTimeOff: (input) => apply(addTimeOff(data, input)),
+    updateTimeOff: (id, input) => apply(updateTimeOff(data, id, input)),
+    deleteTimeOff: (id) => commit(deleteTimeOff(data, id)),
     replaceData: commit,
   };
 

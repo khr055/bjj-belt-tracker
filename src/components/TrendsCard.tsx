@@ -7,12 +7,15 @@ import {
   weeklyAverage,
   weeklyStreak,
   weeklyTotals,
+  type WeeklyStreak,
   type WeekTotal,
 } from '../domain/trends';
-import type { Session } from '../domain/types';
+import type { Session, TimeOff } from '../domain/types';
 
 interface Props {
   sessions: Session[];
+  /** Weeks with time off are left out of the average and goal record, and don't end a streak. */
+  timeOff: TimeOff[];
   /** Sessions a week the practitioner aims for, if they have set a goal. */
   weeklyGoal: number | null;
   today: string;
@@ -27,7 +30,8 @@ function count(amount: number, noun: string): string {
 
 function weekName(week: WeekTotal): string {
   const from = formatShortDate(week.weekStart);
-  return week.current ? `This week (from ${from})` : `Week of ${from}`;
+  const name = week.current ? `This week (from ${from})` : `Week of ${from}`;
+  return week.off ? `${name}, time off` : name;
 }
 
 function weekValue(week: WeekTotal): string {
@@ -65,9 +69,16 @@ function GoalPicker({ weeklyGoal, onSetGoal }: Pick<Props, 'weeklyGoal' | 'onSet
   );
 }
 
-function GoalProgressTile({ sessions, goal, today }: { sessions: Session[]; goal: number; today: string }) {
+interface GoalTileProps {
+  sessions: Session[];
+  timeOff: TimeOff[];
+  goal: number;
+  today: string;
+}
+
+function GoalProgressTile({ sessions, timeOff, goal, today }: GoalTileProps) {
   const progress = goalProgress(sessions, goal, today);
-  const record = goalRecord(sessions, goal, today);
+  const record = goalRecord(sessions, goal, today, TREND_WEEKS, timeOff);
   return (
     <div className="stat" role="group" aria-label="This week's goal">
       <p className="eyebrow">This week's goal</p>
@@ -88,7 +99,18 @@ function GoalProgressTile({ sessions, goal, today }: { sessions: Session[]; goal
   );
 }
 
-export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
+/** What the streak needs next, or what is holding it. */
+function streakDetail(streak: WeeklyStreak): string {
+  const carried =
+    streak.weeksOff > 0 ? ` · Not counting ${count(streak.weeksOff, 'week')} off` : '';
+  if (streak.weeks === 0) {
+    return streak.thisWeekOff ? 'On time off this week' : 'Train this week to start one';
+  }
+  if (streak.thisWeekLogged) return `Including this week${carried}`;
+  return streak.thisWeekOff ? `Held while you are off${carried}` : `Train this week to keep it${carried}`;
+}
+
+export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: Props) {
   if (sessions.length === 0) {
     return (
       <section className="card" aria-labelledby="trends-heading">
@@ -99,9 +121,10 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
     );
   }
 
-  const weeks = weeklyTotals(sessions, today);
-  const streak = weeklyStreak(sessions, today);
-  const average = weeklyAverage(sessions, today);
+  const weeks = weeklyTotals(sessions, today, TREND_WEEKS, timeOff);
+  const streak = weeklyStreak(sessions, today, timeOff);
+  const average = weeklyAverage(sessions, today, TREND_WEEKS, timeOff);
+  const weeksOff = weeks.filter((week) => week.off).length;
   const max = axisMax([...weeks.map((week) => week.sessions), weeklyGoal ?? 0]);
   const ticks = [max, max / 2, 0];
 
@@ -116,13 +139,7 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
             <span className="stat__number">{streak.weeks}</span>{' '}
             {streak.weeks === 1 ? 'week' : 'weeks'}
           </p>
-          <p className="muted">
-            {streak.weeks === 0
-              ? 'Train this week to start one'
-              : streak.thisWeekLogged
-                ? 'Including this week'
-                : 'Train this week to keep it'}
-          </p>
+          <p className="muted">{streakDetail(streak)}</p>
         </div>
         <div className="stat" role="group" aria-label="Weekly average">
           <p className="eyebrow">Weekly average</p>
@@ -139,7 +156,7 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
       </div>
 
       {weeklyGoal !== null && (
-        <GoalProgressTile sessions={sessions} goal={weeklyGoal} today={today} />
+        <GoalProgressTile sessions={sessions} timeOff={timeOff} goal={weeklyGoal} today={today} />
       )}
 
       <div
@@ -166,7 +183,7 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
             {weeks.map((week, index) => (
               <div
                 key={week.weekStart}
-                className="chart__slot"
+                className={`chart__slot${week.off ? ' chart__slot--off' : ''}`}
                 tabIndex={0}
                 role="img"
                 aria-label={`${weekName(week)}: ${weekValue(week)}`}
@@ -209,6 +226,10 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
         <p className="hint">
           Weeks start on Monday. The last bar is this week so far.
           {weeklyGoal !== null && ` The dashed line is your goal of ${weeklyGoal} a week.`}
+          {weeksOff > 0 &&
+            ` Shaded weeks include time off and are left out of your average${
+              weeklyGoal !== null ? ' and goal record' : ''
+            }.`}
         </p>
       </div>
 
@@ -228,6 +249,7 @@ export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
                 <th scope="row">
                   {formatShortDate(week.weekStart)}
                   {week.current ? ' (this week)' : ''}
+                  {week.off ? ' (time off)' : ''}
                 </th>
                 <td>{week.sessions}</td>
                 <td>{formatHours(week.minutes)}</td>

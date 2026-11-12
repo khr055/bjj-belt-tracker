@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import {
+  canLinkTechnique,
   MAX_NAME_LENGTH,
   MAX_SUBMISSION_LENGTH,
   METHOD_LABELS,
@@ -12,7 +13,9 @@ import {
   type Match,
   type MatchMethod,
   type MatchResult,
+  type Technique,
 } from '../domain/types';
+import { sortTechniques } from '../domain/techniques';
 import { ConfirmDelete } from './ConfirmDelete';
 
 interface Props {
@@ -20,18 +23,24 @@ interface Props {
   initial?: Match;
   /** Names the match for screen readers, e.g. "match 2 at Spring Open". */
   label: string;
+  /** The journal, so a win by submission can name the technique it was won with. */
+  techniques: Technique[];
   onSubmit(input: MatchInput): string | null;
   onCancel(): void;
   /** Offered only when editing. */
   onDelete?(): void;
 }
 
-export function MatchForm({ initial, label, onSubmit, onCancel, onDelete }: Props) {
+export function MatchForm({ initial, label, techniques, onSubmit, onCancel, onDelete }: Props) {
   const id = useId();
   // Nothing is pre-selected for a new match, so a result is never recorded by accident.
   const [result, setResult] = useState<MatchResult | null>(initial?.result ?? null);
   const [method, setMethod] = useState<MatchMethod | null>(initial?.method ?? null);
   const [submission, setSubmission] = useState(initial?.submission ?? '');
+  const [techniqueId, setTechniqueId] = useState(initial?.techniqueId ?? '');
+  const linkable =
+    techniques.length > 0 && result !== null && canLinkTechnique({ result, method: method ?? undefined });
+  const linked = linkable && techniqueId !== '';
   const [opponent, setOpponent] = useState(initial?.opponent ?? '');
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +50,15 @@ export function MatchForm({ initial, label, onSubmit, onCancel, onDelete }: Prop
       setError('Choose win, loss or draw.');
       return;
     }
-    setError(onSubmit({ result, method: method ?? undefined, submission, opponent }));
+    setError(
+      onSubmit({
+        result,
+        method: method ?? undefined,
+        submission,
+        techniqueId: linked ? techniqueId : undefined,
+        opponent,
+      }),
+    );
   };
 
   return (
@@ -80,7 +97,26 @@ export function MatchForm({ initial, label, onSubmit, onCancel, onDelete }: Prop
           </div>
         </fieldset>
       )}
-      {result !== 'draw' && method === 'submission' && (
+      {linkable && (
+        <div className="field">
+          <label htmlFor={`${id}-technique`}>
+            Technique from your journal <span className="muted">(optional)</span>
+          </label>
+          <select
+            id={`${id}-technique`}
+            value={techniqueId}
+            onChange={(event) => setTechniqueId(event.target.value)}
+          >
+            <option value="">Not in my journal</option>
+            {sortTechniques(techniques).map((technique) => (
+              <option key={technique.id} value={technique.id}>
+                {technique.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {result !== 'draw' && method === 'submission' && !linked && (
         <div className="field">
           <label htmlFor={`${id}-submission`}>
             Submission <span className="muted">(optional)</span>

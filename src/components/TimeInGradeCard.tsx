@@ -1,6 +1,12 @@
 import { formatDate, formatDuration } from '../domain/dates';
-import { BELT_LABELS } from '../domain/rank';
-import { MINIMUM_LABELS, timeInGrade } from '../domain/timeInGrade';
+import { BELT_LABELS, ordinal } from '../domain/rank';
+import {
+  formatYears,
+  MINIMUM_LABELS,
+  timeInDegree,
+  timeInGrade,
+  type TimeInDegree,
+} from '../domain/timeInGrade';
 import type { Promotion, Rank } from '../domain/types';
 
 interface Props {
@@ -9,7 +15,68 @@ interface Props {
   today: string;
 }
 
+/** Progress towards the next black belt degree. */
+function DegreeBody({ degree, today }: { degree: TimeInDegree; today: string }) {
+  if (degree.status === 'top-degree') {
+    return (
+      <p className="muted">
+        The 7th degree is the coral belt, which this app doesn't track.
+      </p>
+    );
+  }
+  const held = degree.degree === 0 ? 'black belt' : `the ${ordinal(degree.degree)} degree`;
+  const next = `${ordinal(degree.nextDegree)} degree`;
+  const minimum = formatYears(degree.requiredMonths);
+  if (degree.status === 'start-unknown') {
+    return (
+      <p className="muted">
+        IBJJF requires {minimum} at {held} before the {next}. Log your promotion to{' '}
+        {degree.degree === 0 ? 'black belt' : held} in the timeline to see how far along you are.
+      </p>
+    );
+  }
+  const served = formatDuration(degree.since, today);
+  return (
+    <>
+      <progress
+        className="meter"
+        max={100}
+        value={Math.round(degree.progress * 100)}
+        aria-label={`IBJJF minimum time before the ${next}`}
+      />
+      {degree.status === 'met' ? (
+        <p>
+          <strong>Minimum met.</strong> You've spent {served} at {held}; IBJJF requires {minimum}{' '}
+          before the {next}, which you reached on {formatDate(degree.eligibleOn)}.
+        </p>
+      ) : (
+        <p>
+          <strong>{served}</strong> of the {minimum} IBJJF requires at {held} before the {next}.
+          You reach the minimum on {formatDate(degree.eligibleOn)}, in{' '}
+          {formatDuration(today, degree.eligibleOn)}.
+        </p>
+      )}
+    </>
+  );
+}
+
 export function TimeInGradeCard({ rank, promotions, today }: Props) {
+  const degree = timeInDegree(rank, promotions, today);
+  if (degree) {
+    return (
+      <section className="card" aria-labelledby="grade-heading">
+        <h2 id="grade-heading">Time in grade</h2>
+        <DegreeBody degree={degree} today={today} />
+        {degree.status !== 'top-degree' && (
+          <p className="hint">
+            Minimum time is only one requirement. Degrees are awarded by your professor and
+            registered with the federation.
+          </p>
+        )}
+      </section>
+    );
+  }
+
   const grade = timeInGrade(rank, promotions, today);
   const belt = BELT_LABELS[grade.belt].toLowerCase();
   const minimum = MINIMUM_LABELS[grade.belt];
@@ -17,9 +84,8 @@ export function TimeInGradeCard({ rank, promotions, today }: Props) {
   let body;
   if (grade.status === 'top-belt') {
     body = (
-      <p className="muted">
-        Black belt degrees have their own time requirements, which this app doesn't track yet.
-      </p>
+      // Black belt is handled above, by degree.
+      <p className="muted">There is no belt above this one to work towards.</p>
     );
   } else if (grade.status === 'no-minimum') {
     body = (

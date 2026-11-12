@@ -7,7 +7,7 @@ import {
   updatePromotion,
   type PromotionInput,
 } from './promotions';
-import { formatRank, nextRank, rankValue } from './rank';
+import { formatRank, isValidRank, nextRank, rankValue } from './rank';
 import { emptyData, type AppData } from './types';
 
 const TODAY = '2026-11-11';
@@ -39,10 +39,31 @@ describe('rank helpers', () => {
     expect(formatRank({ belt: 'purple', stripes: 3 })).toBe('Purple belt, 3 stripes');
   });
 
+  it('gives a black belt degrees, up to the 6th', () => {
+    expect(formatRank({ belt: 'black', stripes: 0 })).toBe('Black belt');
+    expect(formatRank({ belt: 'black', stripes: 1 })).toBe('Black belt, 1st degree');
+    expect(formatRank({ belt: 'black', stripes: 2 })).toBe('Black belt, 2nd degree');
+    expect(formatRank({ belt: 'black', stripes: 3 })).toBe('Black belt, 3rd degree');
+    expect(formatRank({ belt: 'black', stripes: 6 })).toBe('Black belt, 6th degree');
+    expect(isValidRank({ belt: 'black', stripes: 6 })).toBe(true);
+    expect(isValidRank({ belt: 'black', stripes: 7 })).toBe(false);
+    // A coloured belt still stops at four stripes.
+    expect(isValidRank({ belt: 'brown', stripes: 4 })).toBe(true);
+    expect(isValidRank({ belt: 'brown', stripes: 5 })).toBe(false);
+    expect(rankValue({ belt: 'brown', stripes: 4 })).toBeLessThan(
+      rankValue({ belt: 'black', stripes: 0 }),
+    );
+    expect(rankValue({ belt: 'black', stripes: 5 })).toBeLessThan(
+      rankValue({ belt: 'black', stripes: 6 }),
+    );
+  });
+
   it('suggests the next rank', () => {
     expect(nextRank({ belt: 'white', stripes: 2 })).toEqual({ belt: 'white', stripes: 3 });
     expect(nextRank({ belt: 'white', stripes: 4 })).toEqual({ belt: 'blue', stripes: 0 });
-    expect(nextRank({ belt: 'black', stripes: 4 })).toEqual({ belt: 'black', stripes: 4 });
+    // A black belt goes on to its degrees, and stops at the 6th.
+    expect(nextRank({ belt: 'black', stripes: 4 })).toEqual({ belt: 'black', stripes: 5 });
+    expect(nextRank({ belt: 'black', stripes: 6 })).toEqual({ belt: 'black', stripes: 6 });
   });
 });
 
@@ -144,5 +165,20 @@ describe('updatePromotion and deletePromotion', () => {
     const after = deletePromotion(data, data.promotions[0].id);
     expect(after.promotions).toEqual([]);
     expect(after.rank).toEqual({ belt: 'blue', stripes: 0 });
+  });
+});
+
+describe('black belt degrees in the history', () => {
+  it('logs degrees in order and raises the current rank', () => {
+    let data = mustAdd(emptyData(), { belt: 'black', stripes: 0, date: '2015-06-01' });
+    data = mustAdd(data, { belt: 'black', stripes: 5, date: '2026-06-01' });
+    expect(data.rank).toEqual({ belt: 'black', stripes: 5 });
+    expect(errorOf(addPromotion(data, { belt: 'black', stripes: 6, date: '2020-01-01' }, TODAY))).toContain(
+      "can't be dated before",
+    );
+    expect(errorOf(addPromotion(data, { belt: 'black', stripes: 7, date: TODAY }, TODAY))).toContain(
+      'up to 6 degrees',
+    );
+    expect(errorOf(setRank(data, { belt: 'brown', stripes: 5 }))).toContain('up to 4');
   });
 });

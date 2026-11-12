@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDate } from '../domain/dates';
+import { competitionWins } from '../domain/competitions';
 import { describeSession } from '../domain/sessions';
 import {
   activityOf,
@@ -19,6 +20,7 @@ import {
 } from '../domain/techniques';
 import {
   TECHNIQUE_STATUSES,
+  type Competition,
   type Session,
   type Technique,
   type TechniqueStatus,
@@ -29,6 +31,8 @@ import { TechniqueForm } from './TechniqueForm';
 interface Props {
   techniques: Technique[];
   sessions: Session[];
+  /** For the matches each technique has won. */
+  competitions: Competition[];
   today: string;
   onAdd(input: TechniqueInput): string | null;
   onUpdate(id: string, input: TechniqueInput): string | null;
@@ -108,6 +112,7 @@ function History({ technique, sessions }: HistoryProps) {
 export function TechniquesView({
   techniques,
   sessions,
+  competitions,
   today,
   onAdd,
   onUpdate,
@@ -118,6 +123,7 @@ export function TechniquesView({
   const [status, setStatus] = useState<TechniqueStatus | 'all'>('all');
   const [historyId, setHistoryId] = useState<string | null>(null);
   const activity = techniqueActivity(sessions);
+  const wins = competitionWins(competitions);
   const counts = statusCounts(techniques);
   const shown = techniques.filter((technique) => status === 'all' || technique.status === status);
   const groups = groupByPosition(shown);
@@ -150,6 +156,7 @@ export function TechniquesView({
       );
     }
     const own = activityOf(activity, technique);
+    const won = wins.get(id) ?? 0;
     const next = nextStatus(technique.status);
     const historyOpen = historyId === id;
     return (
@@ -159,6 +166,11 @@ export function TechniquesView({
           <span className="muted list__detail">{describeStage(technique, sessions)}</span>
           <span className="muted list__detail">{describeActivity(own)}</span>
           {own.landed > 0 && <span className="muted list__detail">{describeLanded(own)}</span>}
+          {won > 0 && (
+            <span className="muted list__detail">
+              Won {won} {won === 1 ? 'match' : 'matches'} in competition
+            </span>
+          )}
           {isStale(technique, own, today) && (
             <span className="list__tally">
               Not trained for {daysUntrained(technique, own, today)} days
@@ -267,7 +279,8 @@ export function TechniquesView({
 
       {techniques.length > 0 && (
         <p className="hint">
-          Deleting a technique also takes it off the sessions it was ticked on. The sessions stay.
+          Deleting a technique also takes it off the sessions it was ticked on. The sessions stay,
+          and a competition match won with it keeps its name.
         </p>
       )}
     </section>

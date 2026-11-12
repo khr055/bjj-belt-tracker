@@ -7,9 +7,10 @@ export const BACKUP_FORMAT = 'bjj-belt-tracker-backup';
 /**
  * Version 2 added session notes, the weekly goal and competitions. Version 3 added techniques.
  * Version 4 added the day each technique reached its stage. Version 5 added the kind of session,
- * rounds rolled and the techniques landed in rolling. Older files still restore.
+ * rounds rolled and the techniques landed in rolling. Version 6 added time off, black belt degrees
+ * above the 4th, and competition wins linked to a journal technique. Older files still restore.
  */
-export const BACKUP_VERSION = 5;
+export const BACKUP_VERSION = 6;
 
 const NOT_A_BACKUP = "That file isn't a Belt Tracker backup.";
 
@@ -55,7 +56,8 @@ export function backupReminder(
     data.promotions.length +
     data.sessions.length +
     data.competitions.length +
-    data.techniques.length;
+    data.techniques.length +
+    data.timeOff.length;
   if (records === 0) return null;
   if (snoozedOn !== null && daysBetween(snoozedOn, today) < BACKUP_REMINDER_DAYS) return null;
   if (lastBackup === null) {

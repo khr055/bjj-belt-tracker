@@ -173,12 +173,27 @@ export function sessionsToLand(technique: Technique, sessions: Session[]): numbe
   ).length;
 }
 
-/** Deleting a technique also takes it off the sessions it was ticked on. The sessions stay. */
+/**
+ * Deleting a technique also takes it off the sessions it was ticked on. The sessions stay. A
+ * competition match won with it keeps the technique's name, as words.
+ */
 export function deleteTechnique(data: AppData, id: string): AppData {
   const without = (ids: string[] | undefined) => ids?.filter((other) => other !== id) ?? [];
+  const deleted = data.techniques.find((technique) => technique.id === id);
   return {
     ...data,
     techniques: data.techniques.filter((technique) => technique.id !== id),
+    competitions: data.competitions.map((competition) => {
+      if (!competition.matches.some((match) => match.techniqueId === id)) return competition;
+      return {
+        ...competition,
+        matches: competition.matches.map((match) => {
+          if (match.techniqueId !== id) return match;
+          const { techniqueId: _techniqueId, ...rest } = match;
+          return deleted ? { ...rest, submission: deleted.name } : rest;
+        }),
+      };
+    }),
     sessions: data.sessions.map((session) => {
       if (!session.techniqueIds?.includes(id) && !session.landedIds?.includes(id)) return session;
       const { techniqueIds, landedIds, ...rest } = session;

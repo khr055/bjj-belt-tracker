@@ -63,6 +63,7 @@ const DATA: AppData = {
       statusSince: '2026-09-01',
     },
   ],
+  timeOff: [{ id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury', notes: 'Rib' }],
 };
 
 function file(overrides: Record<string, unknown>): string {
@@ -160,6 +161,7 @@ describe('backup files', () => {
       weeklyGoal: null,
       competitions: [],
       techniques: [],
+      timeOff: [],
     });
   });
 
@@ -209,6 +211,55 @@ describe('backup files', () => {
       { id: 's2', date: '2026-11-02', durationMinutes: 60, type: 'gi' },
     ]);
     expect(result.ok && result.value.skipped).toBe(0);
+  });
+
+  it('restores a version 5 backup, made before time off existed', () => {
+    const { timeOff: _timeOff, ...old } = DATA;
+    const result = readBackup(file({ version: 5, data: old }), TODAY);
+    expect(result.ok && result.value.data).toEqual({ ...old, timeOff: [] });
+    expect(result.ok && result.value.skipped).toBe(0);
+  });
+
+  it('keeps the time off, degrees and linked wins a version 6 backup holds', () => {
+    const [first] = DATA.techniques;
+    const data = {
+      ...DATA,
+      rank: { belt: 'black', stripes: 5 },
+      promotions: [{ id: 'p1', belt: 'black', stripes: 5, date: '2026-01-01' }],
+      competitions: [
+        {
+          id: 'c1',
+          date: '2026-10-17',
+          name: 'Autumn Open',
+          type: 'gi',
+          matches: [
+            { id: 'm1', result: 'win', method: 'submission', techniqueId: first.id },
+            // A link that cannot be right is dropped; the match and its words are kept.
+            { id: 'm2', result: 'win', method: 'submission', techniqueId: 'gone', submission: 'Armbar' },
+            { id: 'm3', result: 'loss', method: 'submission', techniqueId: first.id },
+          ],
+        },
+      ],
+      timeOff: [
+        { id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury' },
+        // A last day before the first is dropped, which leaves the time off still going on.
+        { id: 'o2', startDate: '2026-09-10', endDate: '2026-09-01', reason: 'travel' },
+        { id: 'o3', startDate: '2026-09-20', reason: 'holiday' },
+      ],
+    };
+    const result = readBackup(file({ version: 6, data }), TODAY);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.data.rank).toEqual({ belt: 'black', stripes: 5 });
+    expect(result.value.data.competitions[0].matches).toEqual([
+      { id: 'm1', result: 'win', method: 'submission', techniqueId: first.id },
+      { id: 'm2', result: 'win', method: 'submission', submission: 'Armbar' },
+      { id: 'm3', result: 'loss', method: 'submission' },
+    ]);
+    expect(result.value.data.timeOff).toEqual([
+      { id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury' },
+      { id: 'o2', startDate: '2026-09-10', reason: 'travel' },
+    ]);
+    expect(result.value.skipped).toBe(1);
   });
 
   it('saves backups in the current version', () => {

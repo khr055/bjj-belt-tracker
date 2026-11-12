@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addMonths } from './dates';
-import { timeInGrade } from './timeInGrade';
+import { formatYears, timeInDegree, timeInGrade } from './timeInGrade';
 import type { Promotion } from './types';
 
 const TODAY = '2026-11-11';
@@ -86,5 +86,77 @@ describe('timeInGrade', () => {
   it('flags the date as approximate when only a stripe at this belt is logged', () => {
     const result = timeInGrade({ belt: 'blue', stripes: 2 }, [promotion('blue', 2, '2026-01-10')], TODAY);
     expect(result).toMatchObject({ status: 'serving', since: '2026-01-10', approximate: true });
+  });
+});
+
+describe('timeInDegree', () => {
+  it('applies only to a black belt', () => {
+    expect(timeInDegree({ belt: 'brown', stripes: 4 }, [], TODAY)).toBeNull();
+  });
+
+  it('requires three years at black belt before the 1st degree', () => {
+    const result = timeInDegree(
+      { belt: 'black', stripes: 0 },
+      [promotion('black', 0, '2025-11-11')],
+      TODAY,
+    );
+    expect(result).toMatchObject({
+      status: 'serving',
+      degree: 0,
+      nextDegree: 1,
+      requiredMonths: 36,
+      since: '2025-11-11',
+      eligibleOn: '2028-11-11',
+    });
+    expect(result?.status === 'serving' && result.progress).toBeCloseTo(1 / 3, 2);
+  });
+
+  it.each([
+    [0, 36],
+    [1, 36],
+    [2, 36],
+    [3, 60],
+    [4, 60],
+    [5, 60],
+  ])('requires %i degree(s) to be held for %i months', (degree, months) => {
+    const result = timeInDegree(
+      { belt: 'black', stripes: degree },
+      [promotion('black', degree, '2026-01-01')],
+      TODAY,
+    );
+    expect(result).toMatchObject({ nextDegree: degree + 1, requiredMonths: months });
+  });
+
+  it('counts from the current degree, not from the black belt', () => {
+    const history = [promotion('black', 0, '2015-01-01'), promotion('black', 3, '2021-11-11')];
+    expect(timeInDegree({ belt: 'black', stripes: 3 }, history, TODAY)).toMatchObject({
+      status: 'met',
+      since: '2021-11-11',
+      eligibleOn: '2026-11-11',
+      progress: 1,
+    });
+  });
+
+  it('needs the promotion to the current degree to be logged', () => {
+    const history = [promotion('black', 0, '2015-01-01')];
+    expect(timeInDegree({ belt: 'black', stripes: 2 }, history, TODAY)).toEqual({
+      status: 'start-unknown',
+      degree: 2,
+      nextDegree: 3,
+      requiredMonths: 36,
+    });
+  });
+
+  it('stops at the 6th degree', () => {
+    expect(timeInDegree({ belt: 'black', stripes: 6 }, [], TODAY)).toEqual({
+      status: 'top-degree',
+      degree: 6,
+    });
+  });
+
+  it('formats the minimum in years', () => {
+    expect(formatYears(36)).toBe('3 years');
+    expect(formatYears(60)).toBe('5 years');
+    expect(formatYears(12)).toBe('1 year');
   });
 });

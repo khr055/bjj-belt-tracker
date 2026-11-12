@@ -13,6 +13,7 @@ import {
   type MatchResult,
   type Medal,
   type Result,
+  type Technique,
 } from './types';
 
 export type CompetitionInput = Omit<Competition, 'id' | 'matches'>;
@@ -95,15 +96,30 @@ function cleanCompetition(input: CompetitionInput): CompetitionInput {
   };
 }
 
-/** A draw has no method, and only a submission names a technique. */
-function cleanMatch(input: MatchInput): MatchInput {
+/** Only a win by submission can name a technique from the journal: the journal is your own. */
+export function canLinkTechnique(match: Pick<Match, 'result' | 'method'>): boolean {
+  return match.result === 'win' && match.method === 'submission';
+}
+
+/**
+ * A draw has no method, and only a submission names a technique. A technique chosen from the
+ * journal takes the place of one typed in; one that is no longer in the journal is left off.
+ */
+function cleanMatch(input: MatchInput, techniques: Technique[]): MatchInput {
   const method = input.result === 'draw' ? undefined : input.method;
-  const submission = method === 'submission' ? input.submission?.trim() : undefined;
+  const techniqueId =
+    canLinkTechnique({ result: input.result, method }) &&
+    techniques.some((technique) => technique.id === input.techniqueId)
+      ? input.techniqueId
+      : undefined;
+  const submission =
+    method === 'submission' && !techniqueId ? input.submission?.trim() : undefined;
   const opponent = input.opponent?.trim();
   return {
     result: input.result,
     ...(method ? { method } : {}),
     ...(submission ? { submission } : {}),
+    ...(techniqueId ? { techniqueId } : {}),
     ...(opponent ? { opponent } : {}),
   };
 }
@@ -186,7 +202,7 @@ export function addMatch(
   return withMatches(data, competitionId, (matches) =>
     matches.length >= MAX_MATCHES
       ? { ok: false, error: `A competition can hold up to ${MAX_MATCHES} matches.` }
-      : { ok: true, value: [...matches, { id: newId(), ...cleanMatch(input) }] },
+      : { ok: true, value: [...matches, { id: newId(), ...cleanMatch(input, data.techniques) }] },
   );
 }
 
@@ -202,7 +218,9 @@ export function updateMatch(
     matches.some((m) => m.id === matchId)
       ? {
           ok: true,
-          value: matches.map((m) => (m.id === matchId ? { id: matchId, ...cleanMatch(input) } : m)),
+          value: matches.map((m) =>
+            m.id === matchId ? { id: matchId, ...cleanMatch(input, data.techniques) } : m,
+          ),
         }
       : { ok: false, error: 'That match no longer exists.' },
   );
@@ -285,12 +303,29 @@ export function formatTally({ wins, losses, draws }: Tally): string {
   return parts.join(' · ');
 }
 
+/** The submission a match ended by: the journal technique's name, or the words typed in. */
+export function submissionName(match: Match, techniques: Technique[] = []): string | undefined {
+  const linked = techniques.find((technique) => technique.id === match.techniqueId);
+  return linked?.name ?? match.submission;
+}
+
 /** "Win by submission (armbar)", "Loss on points" or "Draw". */
-export function describeMatch(match: Match): string {
+export function describeMatch(match: Match, techniques: Technique[] = []): string {
   const result = RESULT_LABELS[match.result];
   if (match.result === 'draw' || !match.method) return result;
-  const technique = match.submission ? ` (${match.submission})` : '';
-  return `${result} ${METHOD_PHRASES[match.method]}${technique}`;
+  const name = submissionName(match, techniques);
+  return `${result} ${METHOD_PHRASES[match.method]}${name ? ` (${name})` : ''}`;
+}
+
+/** How many competition matches each journal technique has won, by technique id. */
+export function competitionWins(competitions: Competition[]): Map<string, number> {
+  const wins = new Map<string, number>();
+  for (const match of competitions.flatMap((competition) => competition.matches)) {
+    if (match.techniqueId && canLinkTechnique(match)) {
+      wins.set(match.techniqueId, (wins.get(match.techniqueId) ?? 0) + 1);
+    }
+  }
+  return wins;
 }
 
 export type MethodCounts = Record<MatchMethod, number>;

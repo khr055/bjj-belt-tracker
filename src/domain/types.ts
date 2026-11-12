@@ -1,10 +1,14 @@
 export const BELTS = ['white', 'blue', 'purple', 'brown', 'black'] as const;
 export type Belt = (typeof BELTS)[number];
 
+/** Stripes on a coloured belt. A black belt holds degrees instead. */
 export const MAX_STRIPES = 4;
+/** Degrees on a black belt. The 7th degree is the coral belt, which the app does not model. */
+export const MAX_DEGREES = 6;
 
 export interface Rank {
   belt: Belt;
+  /** Stripes on a coloured belt, 0 to 4; degrees on a black belt, 0 to 6. */
   stripes: number;
 }
 
@@ -86,8 +90,13 @@ export interface Match {
   result: MatchResult;
   /** How a win or loss was decided. A draw has none. */
   method?: MatchMethod;
-  /** The technique, when the match ended by submission. */
+  /** The technique, in words, when the match ended by submission. */
   submission?: string;
+  /**
+   * The journal technique a match was won with, by id, when it ended by submission. Takes the
+   * place of `submission`.
+   */
+  techniqueId?: string;
   opponent?: string;
 }
 
@@ -106,6 +115,20 @@ export interface Competition {
   matches: Match[];
 }
 
+export const TIME_OFF_REASONS = ['injury', 'illness', 'travel', 'other'] as const;
+export type TimeOffReason = (typeof TIME_OFF_REASONS)[number];
+
+/** A stretch away from training, which should not count against streaks and goals. */
+export interface TimeOff {
+  id: string;
+  /** The first day off. */
+  startDate: string;
+  /** The last day off. Left out while the time off is still going on. */
+  endDate?: string;
+  reason: TimeOffReason;
+  notes?: string;
+}
+
 export interface AppData {
   /** Current rank. Never lower than the highest logged promotion. */
   rank: Rank | null;
@@ -117,6 +140,8 @@ export interface AppData {
   competitions: Competition[];
   /** The practitioner's own list of techniques, in the order they were added. */
   techniques: Technique[];
+  /** Periods away from training, in the order they were logged. */
+  timeOff: TimeOff[];
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -129,6 +154,7 @@ export function emptyData(): AppData {
     weeklyGoal: null,
     competitions: [],
     techniques: [],
+    timeOff: [],
   };
 }
 

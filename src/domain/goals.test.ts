@@ -63,4 +63,16 @@ describe('goalRecord', () => {
     expect(goalRecord(sessions, 2, TODAY)).toEqual({ met: 2, weeks: 3 });
     expect(goalRecord(sessions, 3, TODAY)).toEqual({ met: 1, weeks: 3 });
   });
+
+  it('leaves out weeks with time off', () => {
+    const sessions = [
+      session('2026-10-20'), // week of 19 Oct: 2
+      session('2026-10-22'),
+      session('2026-11-03'), // week of 2 Nov: 2; the week of 26 Oct was missed
+      session('2026-11-05'),
+    ];
+    expect(goalRecord(sessions, 2, TODAY)).toEqual({ met: 2, weeks: 3 });
+    const timeOff = [{ id: 'o', startDate: '2026-10-26', endDate: '2026-11-01', reason: 'travel' as const }];
+    expect(goalRecord(sessions, 2, TODAY, 8, timeOff)).toEqual({ met: 2, weeks: 2 });
+  });
 });

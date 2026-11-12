@@ -7,7 +7,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 
 ## Features
 
-- Set and edit your current rank (white to black belt, 0 to 4 stripes).
+- Set and edit your current rank (white to black belt, 0 to 4 stripes, and 0 to 6 degrees on a
+  black belt).
 - Log stripe and belt promotions, including back-dated ones. Out-of-order entries are rejected.
 - See a timeline of promotions and the time spent at each belt and stripe.
 - See the sessions and hours you logged at each belt and each stripe on the timeline.
@@ -20,12 +21,16 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Install it to your phone's home screen and use it with no signal.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
 - See your time in grade against the IBJJF minimum for your belt (2 years at blue, 18 months at
-  purple, 1 year at brown) and the date you reach it.
+  purple, 1 year at brown) and the date you reach it. At black belt, see it against the minimum
+  for your next degree.
 - See training trends: sessions per week for the last 8 weeks, your weekly average and your
   streak of weeks with at least one session.
 - Set a weekly goal of 1 to 7 sessions and see this week's progress and how often you reach it.
+- Log time off (injury, illness, travel or other) so those weeks don't break your streak or count
+  against your weekly average and goal.
 - Log competitions and their matches (win, loss or draw, and how each was decided), and see your
-  overall record, how you win and lose, and your medals.
+  overall record, how you win and lose, and your medals. A win by submission can name the
+  technique from your journal, which then shows the matches it has won.
 - Add a competition you have entered with a future date and see a countdown to it. Matches and a
   medal can be added from the day.
 - Get a reminder on the Overview tab when your history has not been backed up for 30 days, or
@@ -45,10 +50,11 @@ Restoring shows what the file contains and what it will replace before anything 
 replaces the data on the device; it does not merge. Files that are not backups, come from a
 newer version of the app, or contain an out-of-order promotion history are refused.
 
-Backups are saved as format version 5. Version 2 added session notes, the weekly goal and
+Backups are saved as format version 6. Version 2 added session notes, the weekly goal and
 competitions; version 3 added techniques; version 4 added the day each technique reached its
-stage; version 5 added the kind of session, rounds rolled and the techniques landed in rolling.
-Older files still restore.
+stage; version 5 added the kind of session, rounds rolled and the techniques landed in rolling;
+version 6 added time off, black belt degrees above the 4th, and competition wins linked to a
+journal technique. Older files still restore.
 
 ## Techniques
 
@@ -66,6 +72,32 @@ technique lists the sessions it was ticked on, newest first.
 Landing a technique in a roll is recorded on the session, separately from working on it, and
 counts as training it that day. It does not change the technique's stage: moving it to landing
 in rolling stays your call, with the sessions it landed in shown beside it as evidence.
+
+A win by submission in competition can name a technique from the journal in place of typing
+the submission in. Only wins can: the journal is your own techniques, so a submission you lost
+to is typed in. The match follows the technique if you rename it, and keeps its name as plain
+words if you delete it.
+
+## Time off
+
+Add a period on the Training tab with its first day, its last day and a reason. Leave the last
+day blank while you are still off; it then runs up to today. A week counts as time off when any
+day of it was.
+
+- **Streak:** a week off with no session neither adds to the streak nor ends it. A week off that
+  you trained in anyway counts like any other.
+- **Weekly average and goal record:** weeks off are left out, whether or not you trained.
+- **Chart:** weeks off are shaded.
+
+Time off does not change what counts as a stale technique, your time in grade, or your mat time.
+
+## Black belt degrees
+
+A black belt holds degrees in place of stripes, up to the 6th. Time in grade is measured from
+the day the current degree was awarded, against the IBJJF minimums: 3 years each before the 1st,
+2nd and 3rd degrees, and 5 years each before the 4th, 5th and 6th. Log the promotion to your
+current degree on the timeline to see it. The 7th degree and above (coral and red belts) are not
+tracked.
 
 ## Sessions
 

@@ -1,5 +1,6 @@
 import { addDays, weekStart } from './dates';
-import type { Session } from './types';
+import { isWeekOff } from './timeOff';
+import type { Session, TimeOff } from './types';
 
 export const TREND_WEEKS = 8;
 
@@ -12,6 +13,8 @@ export interface WeekTotal {
   rounds: number;
   /** True for the week containing today, which is still in progress. */
   current: boolean;
+  /** True when any day of the week was time off. */
+  off: boolean;
 }
 
 type Totals = Pick<WeekTotal, 'sessions' | 'minutes' | 'rounds'>;
@@ -34,13 +37,19 @@ export function weeklyTotals(
   sessions: Session[],
   today: string,
   weeks: number = TREND_WEEKS,
+  timeOff: TimeOff[] = [],
 ): WeekTotal[] {
   const totals = totalsByWeek(sessions);
   const thisWeek = weekStart(today);
   return Array.from({ length: weeks }, (_, index) => {
     const week = addDays(thisWeek, (index - (weeks - 1)) * 7);
     const total = totals.get(week) ?? { sessions: 0, minutes: 0, rounds: 0 };
-    return { weekStart: week, ...total, current: week === thisWeek };
+    return {
+      weekStart: week,
+      ...total,
+      current: week === thisWeek,
+      off: isWeekOff(timeOff, week, today),
+    };
   });
 }
 
@@ -49,20 +58,48 @@ export interface WeeklyStreak {
   weeks: number;
   /** False while the current week has no session yet; the streak survives until the week ends. */
   thisWeekLogged: boolean;
+  /** True when the current week includes time off, so no session is expected of it. */
+  thisWeekOff: boolean;
+  /** Weeks with time off and no session that the streak carries across. */
+  weeksOff: number;
 }
 
-export function weeklyStreak(sessions: Session[], today: string): WeeklyStreak {
+/**
+ * A week with time off and no session neither adds to the streak nor ends it. A week with time
+ * off that was trained in anyway counts like any other.
+ */
+export function weeklyStreak(
+  sessions: Session[],
+  today: string,
+  timeOff: TimeOff[] = [],
+): WeeklyStreak {
   const totals = totalsByWeek(sessions);
   const thisWeek = weekStart(today);
   const thisWeekLogged = totals.has(thisWeek);
+  const thisWeekOff = isWeekOff(timeOff, thisWeek, today);
+  // Nothing before the first session can be part of a streak, which also ends the walk back.
+  const firstWeek = [...totals.keys()].sort()[0];
 
   let weeks = 0;
+  let weeksOff = 0;
+  let skipped = 0;
   let week = thisWeekLogged ? thisWeek : addDays(thisWeek, -7);
-  while (totals.has(week)) {
-    weeks += 1;
+  while (firstWeek !== undefined && week >= firstWeek) {
+    if (totals.has(week)) {
+      weeks += 1;
+      // Time off only counts as carried across once there is training on its far side.
+      weeksOff += skipped;
+      skipped = 0;
+    } else if (isWeekOff(timeOff, week, today)) {
+      skipped += 1;
+    } else {
+      break;
+    }
     week = addDays(week, -7);
   }
-  return { weeks, thisWeekLogged };
+  // Time off this week, with nothing logged yet, is carried across too.
+  if (weeks > 0 && !thisWeekLogged && thisWeekOff) weeksOff += 1;
+  return { weeks, thisWeekLogged, thisWeekOff, weeksOff };
 }
 
 export interface WeeklyAverage {
@@ -74,17 +111,18 @@ export interface WeeklyAverage {
 /**
  * The finished weeks in the trend window. The current week is left out because it is
  * incomplete, and so are weeks before the first session ever logged, so someone new to the app
- * isn't measured against weeks they weren't using it.
+ * isn't measured against weeks they weren't using it. Weeks with time off are left out as well.
  */
 export function finishedWeeks(
   sessions: Session[],
   today: string,
   weeks: number = TREND_WEEKS,
+  timeOff: TimeOff[] = [],
 ): WeekTotal[] {
   if (sessions.length === 0) return [];
   const firstWeek = sessions.map((s) => weekStart(s.date)).sort()[0];
-  return weeklyTotals(sessions, today, weeks).filter(
-    (week) => !week.current && week.weekStart >= firstWeek,
+  return weeklyTotals(sessions, today, weeks, timeOff).filter(
+    (week) => !week.current && !week.off && week.weekStart >= firstWeek,
   );
 }
 
@@ -93,8 +131,9 @@ export function weeklyAverage(
   sessions: Session[],
   today: string,
   weeks: number = TREND_WEEKS,
+  timeOff: TimeOff[] = [],
 ): WeeklyAverage | null {
-  const finished = finishedWeeks(sessions, today, weeks);
+  const finished = finishedWeeks(sessions, today, weeks, timeOff);
   if (finished.length === 0) return null;
   const total = finished.reduce((sum, week) => sum + week.sessions, 0);
   return { sessions: total / finished.length, weeks: finished.length };
