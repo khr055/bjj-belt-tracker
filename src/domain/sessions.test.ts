@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   addSession,
   deleteSession,
+  filterSessions,
   formatHours,
+  isFiltering,
+  NO_FILTER,
   matTimeStats,
   sessionDefaults,
   sortSessions,
   updateSession,
   type SessionInput,
 } from './sessions';
-import { emptyData, type AppData, type Promotion } from './types';
+import { emptyData, type AppData, type Promotion, type Session } from './types';
 
 const TODAY = '2026-11-11';
 
@@ -34,10 +37,70 @@ describe('addSession', () => {
     [{ date: TODAY, durationMinutes: 45.5, type: 'gi' }, 'duration'],
     [{ date: TODAY, durationMinutes: Number.NaN, type: 'gi' }, 'duration'],
     [{ date: TODAY, durationMinutes: 60, type: 'judo' }, 'gi or no-gi'],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', notes: 'x'.repeat(501) }, '500 characters'],
   ])('rejects %o', (input, message) => {
     const result = addSession(emptyData(), input as SessionInput, TODAY);
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error).toContain(message);
+  });
+});
+
+describe('session notes', () => {
+  it('keeps trimmed notes and leaves blank ones out', () => {
+    let data = mustAdd(emptyData(), {
+      date: TODAY,
+      durationMinutes: 60,
+      type: 'gi',
+      notes: '  Knee cut passing ',
+    });
+    data = mustAdd(data, { date: TODAY, durationMinutes: 60, type: 'gi', notes: '   ' });
+    expect(data.sessions[0].notes).toBe('Knee cut passing');
+    expect(data.sessions[1]).not.toHaveProperty('notes');
+  });
+
+  it('changes and removes notes when a session is edited', () => {
+    const data = mustAdd(emptyData(), { date: TODAY, durationMinutes: 60, type: 'gi', notes: 'Old' });
+    const { id } = data.sessions[0];
+    const input = { date: TODAY, durationMinutes: 60, type: 'gi' } as const;
+
+    const changed = updateSession(data, id, { ...input, notes: 'New' }, TODAY);
+    expect(changed.ok && changed.value.sessions[0].notes).toBe('New');
+
+    const cleared = updateSession(data, id, { ...input, notes: '' }, TODAY);
+    expect(cleared.ok && cleared.value.sessions[0]).toEqual({ id, ...input });
+  });
+});
+
+describe('filterSessions', () => {
+  const sessions: Session[] = [
+    { id: 'a', date: '2026-11-01', durationMinutes: 60, type: 'gi', notes: 'Knee cut passing' },
+    { id: 'b', date: '2026-11-03', durationMinutes: 60, type: 'nogi', notes: 'Leg locks, heel hooks' },
+    { id: 'c', date: '2026-11-05', durationMinutes: 60, type: 'gi' },
+    { id: 'd', date: '2026-11-07', durationMinutes: 60, type: 'nogi', notes: 'Passing the knee shield' },
+  ];
+  const ids = (found: Session[]) => found.map((s) => s.id);
+
+  it('keeps everything when nothing is chosen', () => {
+    expect(isFiltering(NO_FILTER)).toBe(false);
+    expect(isFiltering({ type: 'all', text: '  ' })).toBe(false);
+    expect(filterSessions(sessions, NO_FILTER)).toEqual(sessions);
+  });
+
+  it('filters by type', () => {
+    expect(isFiltering({ type: 'gi', text: '' })).toBe(true);
+    expect(ids(filterSessions(sessions, { type: 'gi', text: '' }))).toEqual(['a', 'c']);
+    expect(ids(filterSessions(sessions, { type: 'nogi', text: '' }))).toEqual(['b', 'd']);
+  });
+
+  it('finds notes containing every word, in any order and case', () => {
+    expect(ids(filterSessions(sessions, { type: 'all', text: 'PASSING' }))).toEqual(['a', 'd']);
+    expect(ids(filterSessions(sessions, { type: 'all', text: 'passing knee' }))).toEqual(['a', 'd']);
+    expect(ids(filterSessions(sessions, { type: 'all', text: 'knee shield' }))).toEqual(['d']);
+    expect(ids(filterSessions(sessions, { type: 'all', text: 'berimbolo' }))).toEqual([]);
+  });
+
+  it('combines the type and the search', () => {
+    expect(ids(filterSessions(sessions, { type: 'gi', text: 'passing' }))).toEqual(['a']);
   });
 });
 

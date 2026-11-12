@@ -67,20 +67,29 @@ export interface WeeklyAverage {
 }
 
 /**
- * Average sessions per week over the finished weeks in the trend window. The current week is
- * left out because it is incomplete, and so are weeks before the first session ever logged,
- * so someone new to the app isn't averaged against weeks they weren't using it.
+ * The finished weeks in the trend window. The current week is left out because it is
+ * incomplete, and so are weeks before the first session ever logged, so someone new to the app
+ * isn't measured against weeks they weren't using it.
  */
+export function finishedWeeks(
+  sessions: Session[],
+  today: string,
+  weeks: number = TREND_WEEKS,
+): WeekTotal[] {
+  if (sessions.length === 0) return [];
+  const firstWeek = sessions.map((s) => weekStart(s.date)).sort()[0];
+  return weeklyTotals(sessions, today, weeks).filter(
+    (week) => !week.current && week.weekStart >= firstWeek,
+  );
+}
+
+/** Average sessions per week over the finished weeks in the trend window. */
 export function weeklyAverage(
   sessions: Session[],
   today: string,
   weeks: number = TREND_WEEKS,
 ): WeeklyAverage | null {
-  if (sessions.length === 0) return null;
-  const firstWeek = sessions.map((s) => weekStart(s.date)).sort()[0];
-  const finished = weeklyTotals(sessions, today, weeks).filter(
-    (week) => !week.current && week.weekStart >= firstWeek,
-  );
+  const finished = finishedWeeks(sessions, today, weeks);
   if (finished.length === 0) return null;
   const total = finished.reduce((sum, week) => sum + week.sessions, 0);
   return { sessions: total / finished.length, weeks: finished.length };

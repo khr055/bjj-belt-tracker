@@ -14,6 +14,7 @@ export type SessionInput = Omit<Session, 'id'>;
 
 export const MAX_SESSION_MINUTES = 600;
 export const DEFAULT_SESSION_MINUTES = 60;
+export const MAX_NOTES_LENGTH = 500;
 
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = { gi: 'Gi', nogi: 'No-gi' };
 
@@ -28,11 +29,20 @@ export function validateSession(input: SessionInput, today: string): string | nu
     return `Enter a duration between 1 and ${MAX_SESSION_MINUTES} minutes.`;
   }
   if (!SESSION_TYPES.includes(input.type)) return 'Choose gi or no-gi.';
+  if ((input.notes ?? '').trim().length > MAX_NOTES_LENGTH) {
+    return `Keep notes to ${MAX_NOTES_LENGTH} characters or fewer.`;
+  }
   return null;
 }
 
 function pick(input: SessionInput): SessionInput {
-  return { date: input.date, durationMinutes: input.durationMinutes, type: input.type };
+  const notes = input.notes?.trim();
+  return {
+    date: input.date,
+    durationMinutes: input.durationMinutes,
+    type: input.type,
+    ...(notes ? { notes } : {}),
+  };
 }
 
 export function addSession(data: AppData, input: SessionInput, today: string): Result<AppData> {
@@ -74,6 +84,28 @@ export function sortSessions(sessions: Session[]): Session[] {
     .map((session, index) => ({ session, index }))
     .sort((a, b) => b.session.date.localeCompare(a.session.date) || b.index - a.index)
     .map(({ session }) => session);
+}
+
+export interface SessionFilter {
+  type: SessionType | 'all';
+  /** Words to look for in the notes. */
+  text: string;
+}
+
+export const NO_FILTER: SessionFilter = { type: 'all', text: '' };
+
+export function isFiltering(filter: SessionFilter): boolean {
+  return filter.type !== 'all' || filter.text.trim() !== '';
+}
+
+/** Keeps sessions of the chosen type whose notes contain every word searched for. */
+export function filterSessions(sessions: Session[], filter: SessionFilter): Session[] {
+  const words = filter.text.toLowerCase().split(/\s+/).filter(Boolean);
+  return sessions.filter((session) => {
+    if (filter.type !== 'all' && session.type !== filter.type) return false;
+    const notes = (session.notes ?? '').toLowerCase();
+    return words.every((word) => notes.includes(word));
+  });
 }
 
 /** Pre-fills the next session from the last one logged, so a regular class is one tap. */

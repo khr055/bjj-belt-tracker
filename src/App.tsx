@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { BackupView } from './components/BackupView';
+import { CompetitionRecordCard } from './components/CompetitionRecordCard';
+import { CompetitionsView } from './components/CompetitionsView';
 import { MatTimeStats } from './components/MatTimeStats';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
@@ -16,6 +18,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'training', label: 'Training' },
+  { id: 'compete', label: 'Compete' },
   { id: 'backup', label: 'Backup' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -65,7 +68,10 @@ export default function App() {
             {data.rank && (
               <TimeInGradeCard rank={data.rank} promotions={data.promotions} today={today} />
             )}
-            <MatTimeStats data={data} />
+            <MatTimeStats data={data} today={today} />
+            {data.competitions.length > 0 && (
+              <CompetitionRecordCard competitions={data.competitions} />
+            )}
             <section className="card" aria-labelledby="quick-log-heading">
               <h2 id="quick-log-heading">Log a session</h2>
               <SessionForm
@@ -97,7 +103,12 @@ export default function App() {
                 onSubmit={(input) => actions.addSession(input, today)}
               />
             </section>
-            <TrendsCard sessions={data.sessions} today={today} />
+            <TrendsCard
+              sessions={data.sessions}
+              weeklyGoal={data.weeklyGoal}
+              today={today}
+              onSetGoal={actions.setWeeklyGoal}
+            />
             <section className="card" aria-labelledby="sessions-heading">
               <h2 id="sessions-heading">Sessions</h2>
               <SessionList
@@ -108,6 +119,19 @@ export default function App() {
               />
             </section>
           </>
+        )}
+
+        {tab === 'compete' && (
+          <CompetitionsView
+            competitions={data.competitions}
+            today={today}
+            onAdd={(input) => actions.addCompetition(input, today)}
+            onUpdate={(id, input) => actions.updateCompetition(id, input, today)}
+            onDelete={actions.deleteCompetition}
+            onAddMatch={actions.addMatch}
+            onUpdateMatch={actions.updateMatch}
+            onDeleteMatch={actions.deleteMatch}
+          />
         )}
 
         {tab === 'backup' && (

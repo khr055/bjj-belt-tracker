@@ -1,4 +1,5 @@
 import { formatShortDate } from '../domain/dates';
+import { goalProgress, goalRecord, MAX_WEEKLY_GOAL } from '../domain/goals';
 import { formatHours } from '../domain/sessions';
 import {
   axisMax,
@@ -12,8 +13,13 @@ import type { Session } from '../domain/types';
 
 interface Props {
   sessions: Session[];
+  /** Sessions a week the practitioner aims for, if they have set a goal. */
+  weeklyGoal: number | null;
   today: string;
+  onSetGoal(goal: number | null): string | null;
 }
+
+const GOAL_CHOICES = Array.from({ length: MAX_WEEKLY_GOAL }, (_, index) => index + 1);
 
 function count(amount: number, noun: string): string {
   return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
@@ -28,12 +34,67 @@ function weekValue(week: WeekTotal): string {
   return `${count(week.sessions, 'session')}, ${formatHours(week.minutes)} hours`;
 }
 
-export function TrendsCard({ sessions, today }: Props) {
+function GoalPicker({ weeklyGoal, onSetGoal }: Pick<Props, 'weeklyGoal' | 'onSetGoal'>) {
+  return (
+    <fieldset className="choices">
+      <legend>Weekly goal</legend>
+      <div className="choices__row">
+        <label className="chip">
+          <input
+            type="radio"
+            name="weekly-goal"
+            checked={weeklyGoal === null}
+            onChange={() => onSetGoal(null)}
+          />
+          No goal
+        </label>
+        {GOAL_CHOICES.map((goal) => (
+          <label key={goal} className="chip chip--number">
+            <input
+              type="radio"
+              name="weekly-goal"
+              aria-label={`${count(goal, 'session')} a week`}
+              checked={weeklyGoal === goal}
+              onChange={() => onSetGoal(goal)}
+            />
+            {goal}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function GoalProgressTile({ sessions, goal, today }: { sessions: Session[]; goal: number; today: string }) {
+  const progress = goalProgress(sessions, goal, today);
+  const record = goalRecord(sessions, goal, today);
+  return (
+    <div className="stat" role="group" aria-label="This week's goal">
+      <p className="eyebrow">This week's goal</p>
+      <p className="stat__figures">
+        <span className="stat__number">{progress.done}</span> of {count(goal, 'session')}
+      </p>
+      <progress
+        className="meter"
+        max={goal}
+        value={Math.min(progress.done, goal)}
+        aria-label="Progress towards this week's goal"
+      />
+      <p className="muted">
+        {progress.met ? 'Goal reached' : `${progress.remaining} to go`}
+        {record && ` · Reached in ${record.met} of the last ${count(record.weeks, 'full week')}`}
+      </p>
+    </div>
+  );
+}
+
+export function TrendsCard({ sessions, weeklyGoal, today, onSetGoal }: Props) {
   if (sessions.length === 0) {
     return (
       <section className="card" aria-labelledby="trends-heading">
         <h2 id="trends-heading">Training trends</h2>
         <p className="muted">Log a few sessions to see your weekly trend and streak.</p>
+        <GoalPicker weeklyGoal={weeklyGoal} onSetGoal={onSetGoal} />
       </section>
     );
   }
@@ -41,7 +102,7 @@ export function TrendsCard({ sessions, today }: Props) {
   const weeks = weeklyTotals(sessions, today);
   const streak = weeklyStreak(sessions, today);
   const average = weeklyAverage(sessions, today);
-  const max = axisMax(weeks.map((week) => week.sessions));
+  const max = axisMax([...weeks.map((week) => week.sessions), weeklyGoal ?? 0]);
   const ticks = [max, max / 2, 0];
 
   return (
@@ -76,6 +137,10 @@ export function TrendsCard({ sessions, today }: Props) {
           </p>
         </div>
       </div>
+
+      {weeklyGoal !== null && (
+        <GoalProgressTile sessions={sessions} goal={weeklyGoal} today={today} />
+      )}
 
       <div
         className="chart"
@@ -127,6 +192,13 @@ export function TrendsCard({ sessions, today }: Props) {
                 </span>
               </div>
             ))}
+            {weeklyGoal !== null && (
+              <span
+                className="chart__goal"
+                style={{ bottom: `${(weeklyGoal / max) * 100}%` }}
+                aria-hidden="true"
+              />
+            )}
           </div>
           <div className="chart__labels" aria-hidden="true">
             {weeks.map((week, index) => (
@@ -134,7 +206,10 @@ export function TrendsCard({ sessions, today }: Props) {
             ))}
           </div>
         </div>
-        <p className="hint">Weeks start on Monday. The last bar is this week so far.</p>
+        <p className="hint">
+          Weeks start on Monday. The last bar is this week so far.
+          {weeklyGoal !== null && ` The dashed line is your goal of ${weeklyGoal} a week.`}
+        </p>
       </div>
 
       <details className="chart-table">
@@ -161,6 +236,8 @@ export function TrendsCard({ sessions, today }: Props) {
           </tbody>
         </table>
       </details>
+
+      <GoalPicker weeklyGoal={weeklyGoal} onSetGoal={onSetGoal} />
     </section>
   );
 }

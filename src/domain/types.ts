@@ -24,6 +24,44 @@ export interface Session {
   date: string;
   durationMinutes: number;
   type: SessionType;
+  notes?: string;
+}
+
+export const MATCH_RESULTS = ['win', 'loss', 'draw'] as const;
+export type MatchResult = (typeof MATCH_RESULTS)[number];
+
+export const MATCH_METHODS = [
+  'submission',
+  'points',
+  'advantages',
+  'decision',
+  'disqualification',
+] as const;
+export type MatchMethod = (typeof MATCH_METHODS)[number];
+
+export interface Match {
+  id: string;
+  result: MatchResult;
+  /** How a win or loss was decided. A draw has none. */
+  method?: MatchMethod;
+  /** The technique, when the match ended by submission. */
+  submission?: string;
+  opponent?: string;
+}
+
+export const MEDALS = ['gold', 'silver', 'bronze'] as const;
+export type Medal = (typeof MEDALS)[number];
+
+export interface Competition {
+  id: string;
+  date: string;
+  name: string;
+  type: SessionType;
+  division?: string;
+  medal?: Medal;
+  notes?: string;
+  /** Kept in the order they were fought. */
+  matches: Match[];
 }
 
 export interface AppData {
@@ -32,12 +70,15 @@ export interface AppData {
   promotions: Promotion[];
   /** Kept in the order they were logged, so the latest entry supplies form defaults. */
   sessions: Session[];
+  /** Sessions the practitioner aims to train each week, if they have set a goal. */
+  weeklyGoal: number | null;
+  competitions: Competition[];
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export function emptyData(): AppData {
-  return { rank: null, promotions: [], sessions: [] };
+  return { rank: null, promotions: [], sessions: [], weeklyGoal: null, competitions: [] };
 }
 
 export function newId(): string {

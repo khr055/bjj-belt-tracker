@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { backupFileName, BACKUP_FORMAT, createBackupText, readBackup } from './backup';
-import type { AppData } from './types';
+import {
+  backupFileName,
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  createBackupText,
+  readBackup,
+} from './backup';
+import { emptyData, type AppData } from './types';
 
 const TODAY = '2026-11-11';
 const SAVED_AT = new Date(2026, 10, 10, 9, 30);
@@ -11,7 +17,25 @@ const DATA: AppData = {
     { id: 'p1', belt: 'white', stripes: 0, date: '2022-01-10' },
     { id: 'p2', belt: 'blue', stripes: 0, date: '2024-03-02', promotedBy: 'Coach', academy: 'Gym' },
   ],
-  sessions: [{ id: 's1', date: '2026-11-01', durationMinutes: 90, type: 'nogi' }],
+  sessions: [
+    { id: 's1', date: '2026-11-01', durationMinutes: 90, type: 'nogi', notes: 'Guard retention' },
+  ],
+  weeklyGoal: 3,
+  competitions: [
+    {
+      id: 'c1',
+      date: '2026-10-17',
+      name: 'Autumn Open',
+      type: 'gi',
+      division: 'Adult, blue belt, middleweight',
+      medal: 'gold',
+      notes: 'First gold',
+      matches: [
+        { id: 'm1', result: 'win', method: 'submission', submission: 'Triangle', opponent: 'A. Rival' },
+        { id: 'm2', result: 'win', method: 'points' },
+      ],
+    },
+  ],
 };
 
 function file(overrides: Record<string, unknown>): string {
@@ -38,7 +62,7 @@ describe('backup files', () => {
   });
 
   it('round-trips an empty app', () => {
-    const empty: AppData = { rank: null, promotions: [], sessions: [] };
+    const empty = emptyData();
     const result = readBackup(createBackupText(empty, SAVED_AT), TODAY);
     expect(result.ok && result.value.data).toEqual(empty);
   });
@@ -53,7 +77,17 @@ describe('backup files', () => {
   });
 
   it('refuses a backup from a newer version of the app', () => {
-    expect(errorOf(file({ version: 2 }))).toContain('newer version');
+    expect(errorOf(file({ version: BACKUP_VERSION + 1 }))).toContain('newer version');
+  });
+
+  it('restores a version 1 backup, made before goals and competitions existed', () => {
+    const old = { rank: DATA.rank, promotions: DATA.promotions, sessions: [] };
+    const result = readBackup(file({ version: 1, data: old }), TODAY);
+    expect(result.ok && result.value.data).toEqual({ ...old, weeklyGoal: null, competitions: [] });
+  });
+
+  it('saves backups in the current version', () => {
+    expect(JSON.parse(createBackupText(DATA, SAVED_AT)).version).toBe(BACKUP_VERSION);
   });
 
   it('refuses a history whose promotions are out of order', () => {

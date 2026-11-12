@@ -4,7 +4,8 @@ import { findHistoryConflict } from './promotions';
 import type { AppData, Result } from './types';
 
 export const BACKUP_FORMAT = 'bjj-belt-tracker-backup';
-export const BACKUP_VERSION = 1;
+/** Version 2 added session notes, the weekly goal and competitions. Version 1 files still restore. */
+export const BACKUP_VERSION = 2;
 
 const NOT_A_BACKUP = "That file isn't a Belt Tracker backup.";
 

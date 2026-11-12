@@ -31,11 +31,18 @@ function describe(data: AppData): string {
     data.rank ? formatRank(data.rank) : 'No rank set',
     count(data.promotions.length, 'promotion'),
     count(data.sessions.length, 'session'),
+    count(data.competitions.length, 'competition'),
   ].join(' · ');
 }
 
 function isEmpty(data: AppData): boolean {
-  return data.rank === null && data.promotions.length === 0 && data.sessions.length === 0;
+  return (
+    data.rank === null &&
+    data.promotions.length === 0 &&
+    data.sessions.length === 0 &&
+    data.competitions.length === 0 &&
+    data.weeklyGoal === null
+  );
 }
 
 export function BackupView({ data, today, onRestore }: Props) {
@@ -86,7 +93,7 @@ export function BackupView({ data, today, onRestore }: Props) {
     onRestore(restored);
     setPending(null);
     setStatus(
-      `Restored ${count(restored.promotions.length, 'promotion')} and ${count(restored.sessions.length, 'session')}.`,
+      `Restored ${count(restored.promotions.length, 'promotion')}, ${count(restored.sessions.length, 'session')} and ${count(restored.competitions.length, 'competition')}.`,
     );
   };
 

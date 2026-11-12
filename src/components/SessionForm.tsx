@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
-import { SESSION_TYPE_LABELS, type SessionInput } from '../domain/sessions';
+import { MAX_NOTES_LENGTH, SESSION_TYPE_LABELS, type SessionInput } from '../domain/sessions';
 import { SESSION_TYPES, type Session, type SessionType } from '../domain/types';
 
 interface Props {
@@ -19,16 +19,19 @@ export function SessionForm({ initial, defaults, today, onSubmit, onCancel }: Pr
   const [date, setDate] = useState(initial?.date ?? today);
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? defaults.durationMinutes));
   const [type, setType] = useState<SessionType>(initial?.type ?? defaults.type);
+  const [notes, setNotes] = useState(initial?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const minutes = Number(duration);
-    const problem = onSubmit({ date, durationMinutes: minutes, type });
+    const problem = onSubmit({ date, durationMinutes: minutes, type, notes });
     setError(problem);
-    // A new session keeps its values so the next class can be logged straight away.
+    // A new session keeps its date, duration and type so the next class can be logged straight
+    // away. The notes belong to the class just logged, so they are cleared.
     setSaved(problem || initial ? null : `Logged ${minutes} min ${SESSION_TYPE_LABELS[type]} session.`);
+    if (!problem && !initial) setNotes('');
   };
 
   return (
@@ -89,6 +92,18 @@ export function SessionForm({ initial, defaults, today, onSubmit, onCancel }: Pr
           ))}
         </div>
       </fieldset>
+      <div className="field">
+        <label htmlFor={`${id}-notes`}>
+          Notes <span className="muted">(optional)</span>
+        </label>
+        <textarea
+          id={`${id}-notes`}
+          rows={2}
+          maxLength={MAX_NOTES_LENGTH}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+        />
+      </div>
       {error && (
         <p className="error" role="alert">
           {error}

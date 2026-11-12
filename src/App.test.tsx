@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createBackupText, readBackup } from './domain/backup';
 import { addDays, formatShortDate, todayIso, weekStart } from './domain/dates';
-import type { AppData } from './domain/types';
+import { emptyData, type AppData } from './domain/types';
 import { downloadTextFile } from './state/files';
 import { STORAGE_KEY } from './state/storage';
 
@@ -15,8 +15,8 @@ vi.mock('./state/files', async (importOriginal) => ({
   canShareFiles: () => false,
 }));
 
-function seed(data: AppData) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function seed(data: Partial<AppData>) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyData(), ...data }));
 }
 
 function stored(): AppData {
@@ -199,6 +199,225 @@ describe('Training trends', () => {
   });
 });
 
+describe('Training log', () => {
+  it('logs a session with notes and finds it by type and by searching the notes', async () => {
+    seed({
+      sessions: [
+        { id: 'old', date: '2024-05-01', durationMinutes: 60, type: 'nogi', notes: 'Leg locks' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const form = screen.getByRole('form', { name: 'Log session' });
+    await user.type(within(form).getByLabelText(/Notes/), 'Knee cut passing');
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+    // The notes belong to the class just logged, so the next one starts blank.
+    expect(within(form).getByLabelText(/Notes/)).toHaveValue('');
+    expect(stored().sessions[1]).toMatchObject({ type: 'nogi', notes: 'Knee cut passing' });
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(within(list).getByText('Knee cut passing')).toBeInTheDocument();
+    expect(within(list).getByText('Leg locks')).toBeInTheDocument();
+
+    await user.type(within(list).getByLabelText('Search notes'), 'leg');
+    expect(within(list).queryByText('Knee cut passing')).not.toBeInTheDocument();
+    expect(within(list).getByText('Leg locks')).toBeInTheDocument();
+    expect(within(list).getByRole('status')).toHaveTextContent('Showing 1 of 2 sessions · 1 hours');
+
+    // Both sessions are no-gi, so asking for gi leaves nothing.
+    await user.click(within(list).getByRole('button', { name: 'Gi' }));
+    expect(within(list).getByText('No sessions match.')).toBeInTheDocument();
+
+    await user.click(within(list).getByRole('button', { name: 'Clear filters' }));
+    expect(within(list).getByText('Knee cut passing')).toBeInTheDocument();
+    expect(within(list).getByText('Leg locks')).toBeInTheDocument();
+    expect(within(list).getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('edits the notes on a session', async () => {
+    seed({
+      sessions: [{ id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', notes: 'Old' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const form = screen.getByRole('form', { name: 'Edit session' });
+    await user.clear(within(form).getByLabelText(/Notes/));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0]).toEqual({
+      id: 's1',
+      date: '2024-05-01',
+      durationMinutes: 60,
+      type: 'gi',
+    });
+  });
+
+  it('sets a weekly goal and tracks this week against it', async () => {
+    const thisWeek = weekStart(todayIso());
+    seed({
+      sessions: [
+        { id: 's1', date: thisWeek, durationMinutes: 60, type: 'gi' },
+        { id: 's2', date: addDays(thisWeek, -7), durationMinutes: 60, type: 'gi' },
+        { id: 's3', date: addDays(thisWeek, -6), durationMinutes: 60, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    expect(screen.queryByRole('group', { name: "This week's goal" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: '2 sessions a week' }));
+    const goal = screen.getByRole('group', { name: "This week's goal" });
+    expect(goal).toHaveTextContent('1 of 2 sessions');
+    expect(goal).toHaveTextContent('1 to go · Reached in 1 of the last 1 full week');
+    expect(within(goal).getByRole('progressbar')).toHaveValue(1);
+    expect(stored().weeklyGoal).toBe(2);
+    expect(screen.getByRole('group', { name: 'Sessions per week, last 8 weeks' })).toHaveTextContent(
+      'The dashed line is your goal of 2 a week.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    const week = screen.getByRole('group', { name: 'This week' });
+    expect(week).toHaveTextContent('1 session');
+    expect(week).toHaveTextContent('1 to go for your goal of 2');
+
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    await user.click(screen.getByRole('radio', { name: 'No goal' }));
+    expect(screen.queryByRole('group', { name: "This week's goal" })).not.toBeInTheDocument();
+    expect(stored().weeklyGoal).toBeNull();
+  });
+});
+
+describe('Competitions', () => {
+  it('logs a competition and its matches and shows the record', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Competition record' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    expect(screen.getByText(/No competitions logged yet/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Log competition' }));
+    const form = screen.getByRole('form', { name: 'Log competition' });
+    await user.type(within(form).getByLabelText('Competition name'), 'Autumn Open');
+    fireEvent.change(within(form).getByLabelText('Competition date'), {
+      target: { value: '2024-10-19' },
+    });
+    await user.type(within(form).getByLabelText(/Division/), 'Adult, blue belt');
+    await user.click(within(form).getByRole('radio', { name: 'Gold' }));
+    await user.click(within(form).getByRole('button', { name: 'Save competition' }));
+
+    const list = screen.getByRole('region', { name: 'Competitions' });
+    expect(list).toHaveTextContent('19 Oct 2024 · Gi · Adult, blue belt · Gold medal');
+    expect(list).toHaveTextContent('No matches yet');
+
+    // A new match has nothing chosen, so a result is never recorded by accident.
+    await user.click(screen.getByRole('button', { name: 'Add match to Autumn Open' }));
+    let matchForm = screen.getByRole('form', { name: 'Add match' });
+    await user.click(within(matchForm).getByRole('button', { name: 'Save match' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose win, loss or draw.');
+    await user.click(within(matchForm).getByRole('radio', { name: 'Win' }));
+    await user.click(within(matchForm).getByRole('button', { name: 'Save match' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose how the match was decided.');
+    await user.click(within(matchForm).getByRole('radio', { name: 'Submission' }));
+    await user.type(within(matchForm).getByRole('textbox', { name: /Submission/ }), 'Armbar');
+    await user.type(within(matchForm).getByRole('textbox', { name: /Opponent/ }), 'A. Rival');
+    await user.click(within(matchForm).getByRole('button', { name: 'Save match' }));
+
+    await user.click(screen.getByRole('button', { name: 'Add match to Autumn Open' }));
+    matchForm = screen.getByRole('form', { name: 'Add match' });
+    await user.click(within(matchForm).getByRole('radio', { name: 'Loss' }));
+    await user.click(within(matchForm).getByRole('radio', { name: 'Points' }));
+    await user.click(within(matchForm).getByRole('button', { name: 'Save match' }));
+
+    const matches = screen.getByRole('list', { name: 'Matches at Autumn Open' });
+    const rows = within(matches).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Win by submission (Armbar)');
+    expect(rows[0]).toHaveTextContent('vs A. Rival');
+    expect(rows[1]).toHaveTextContent('Loss on points');
+    expect(list).toHaveTextContent('1 win · 1 loss');
+
+    const record = screen.getByRole('region', { name: 'Competition record' });
+    const figures = within(record).getByRole('group', { name: 'Match record' });
+    expect(figures).toHaveTextContent('1 win·1 loss');
+    expect(figures).toHaveTextContent('2 matches across 1 competition');
+    expect(record).toHaveTextContent('Wins1 by submission');
+    expect(record).toHaveTextContent('Losses1 on points');
+    expect(record).toHaveTextContent('Medals1 gold');
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByRole('region', { name: 'Competition record' })).toHaveTextContent(
+      '2 matches across 1 competition',
+    );
+  });
+
+  it('edits and deletes matches and competitions', async () => {
+    seed({
+      competitions: [
+        {
+          id: 'c1',
+          date: '2024-10-19',
+          name: 'Autumn Open',
+          type: 'gi',
+          matches: [{ id: 'm1', result: 'win', method: 'points' }],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit match 1 at Autumn Open' }));
+    let matchForm = screen.getByRole('form', { name: 'Edit match' });
+    expect(within(matchForm).getByRole('radio', { name: 'Points' })).toBeChecked();
+    await user.click(within(matchForm).getByRole('radio', { name: 'Draw' }));
+    expect(within(matchForm).queryByRole('group', { name: 'Decided by' })).not.toBeInTheDocument();
+    await user.click(within(matchForm).getByRole('button', { name: 'Save changes' }));
+    expect(stored().competitions[0].matches).toEqual([{ id: 'm1', result: 'draw' }]);
+
+    await user.click(screen.getByRole('button', { name: 'Edit match 1 at Autumn Open' }));
+    matchForm = screen.getByRole('form', { name: 'Edit match' });
+    await user.click(within(matchForm).getByRole('button', { name: 'Delete match 1 at Autumn Open' }));
+    await user.click(
+      within(matchForm).getByRole('button', { name: 'Confirm delete match 1 at Autumn Open' }),
+    );
+    expect(stored().competitions[0].matches).toEqual([]);
+    expect(screen.queryByRole('form', { name: 'Edit match' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit Autumn Open' }));
+    const form = screen.getByRole('form', { name: 'Edit competition' });
+    await user.clear(within(form).getByLabelText('Competition name'));
+    await user.type(within(form).getByLabelText('Competition name'), 'Winter Open');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().competitions[0]).toMatchObject({ id: 'c1', name: 'Winter Open' });
+
+    await user.click(screen.getByRole('button', { name: 'Delete Winter Open' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm delete Winter Open' }));
+    expect(stored().competitions).toEqual([]);
+    expect(screen.getByText(/No competitions logged yet/)).toBeInTheDocument();
+  });
+
+  it('refuses a competition dated in the future', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    await user.click(screen.getByRole('button', { name: 'Log competition' }));
+    const form = screen.getByRole('form', { name: 'Log competition' });
+    await user.type(within(form).getByLabelText('Competition name'), 'Next Open');
+    fireEvent.change(within(form).getByLabelText('Competition date'), {
+      target: { value: addDays(todayIso(), 30) },
+    });
+    // The date picker's own limit stops this in a browser; submit directly to reach the app's check.
+    fireEvent.submit(form);
+    expect(screen.getByRole('alert')).toHaveTextContent("A competition can't be dated in the future.");
+    expect(stored()).toBeNull();
+  });
+});
+
 describe('Time in grade', () => {
   it('shows when the IBJJF minimum at the current belt was met', () => {
     seed({
@@ -238,12 +457,26 @@ describe('Time in grade', () => {
 
 describe('Backup and restore', () => {
   const HISTORY: AppData = {
+    ...emptyData(),
     rank: { belt: 'blue', stripes: 1 },
     promotions: [
       { id: 'p1', belt: 'blue', stripes: 0, date: '2024-06-01' },
       { id: 'p2', belt: 'blue', stripes: 1, date: '2025-02-01' },
     ],
-    sessions: [{ id: 's1', date: '2025-03-01', durationMinutes: 90, type: 'gi' }],
+    sessions: [
+      { id: 's1', date: '2025-03-01', durationMinutes: 90, type: 'gi', notes: 'Closed guard' },
+    ],
+    weeklyGoal: 2,
+    competitions: [
+      {
+        id: 'c1',
+        date: '2025-04-12',
+        name: 'Spring Open',
+        type: 'gi',
+        medal: 'silver',
+        matches: [{ id: 'm1', result: 'win', method: 'points' }],
+      },
+    ],
   };
 
   function backupFile(data: AppData, name = 'backup.json'): File {
@@ -275,6 +508,7 @@ describe('Backup and restore', () => {
 
   it('shows what a backup contains and only replaces data once confirmed', async () => {
     const existing: AppData = {
+      ...emptyData(),
       rank: { belt: 'white', stripes: 2 },
       promotions: [],
       sessions: [{ id: 'old', date: '2023-01-01', durationMinutes: 60, type: 'gi' }],
@@ -286,15 +520,15 @@ describe('Backup and restore', () => {
 
     await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
     const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
-    expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session');
+    expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session · 1 competition');
     expect(confirm).toHaveTextContent(
-      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session.',
+      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session · 0 competitions.',
     );
     expect(stored()).toEqual(existing);
 
     await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
     expect(stored()).toEqual(HISTORY);
-    expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions and 1 session.');
+    expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions, 1 session and 1 competition.');
 
     await user.click(screen.getByRole('button', { name: 'Overview' }));
     expect(screen.getByRole('heading', { name: 'Blue belt, 1 stripe' })).toBeInTheDocument();
@@ -306,7 +540,7 @@ describe('Backup and restore', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Backup' }));
 
-    const empty: AppData = { rank: null, promotions: [], sessions: [] };
+    const empty = emptyData();
     await user.upload(screen.getByLabelText('Backup file'), backupFile(empty));
     const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));

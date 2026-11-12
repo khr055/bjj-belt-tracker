@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { formatDate } from '../domain/dates';
 import {
+  filterSessions,
+  formatHours,
+  isFiltering,
+  NO_FILTER,
   sessionDefaults,
   SESSION_TYPE_LABELS,
   sortSessions,
+  summarize,
+  type SessionFilter,
   type SessionInput,
 } from '../domain/sessions';
-import type { Session } from '../domain/types';
+import { SESSION_TYPES, type Session } from '../domain/types';
 import { ConfirmDelete } from './ConfirmDelete';
 import { SessionForm } from './SessionForm';
 
@@ -17,57 +23,114 @@ interface Props {
   onDelete(id: string): void;
 }
 
+const TYPE_FILTERS = [
+  { value: 'all', label: 'All' },
+  ...SESSION_TYPES.map((type) => ({ value: type, label: SESSION_TYPE_LABELS[type] })),
+] as const;
+
+function count(amount: number, noun: string): string {
+  return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
+}
+
 export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
+  const searchId = useId();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<SessionFilter>(NO_FILTER);
 
   if (sessions.length === 0) {
     return <p className="muted">No sessions logged yet.</p>;
   }
 
+  const filtering = isFiltering(filter);
+  const shown = sortSessions(filterSessions(sessions, filter));
+
   return (
-    <ul className="list">
-      {sortSessions(sessions).map((session) => {
-        const label = `${SESSION_TYPE_LABELS[session.type]} session on ${formatDate(session.date)}`;
-        if (editingId === session.id) {
+    <>
+      <div className="filters" role="search" aria-label="Filter sessions">
+        <div className="choices__row" role="group" aria-label="Session type">
+          {TYPE_FILTERS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              className="chip chip--button"
+              aria-pressed={filter.type === value}
+              onClick={() => setFilter({ ...filter, type: value })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="field">
+          <label htmlFor={searchId}>Search notes</label>
+          <input
+            id={searchId}
+            type="search"
+            value={filter.text}
+            autoComplete="off"
+            onChange={(event) => setFilter({ ...filter, text: event.target.value })}
+          />
+        </div>
+      </div>
+
+      <p className="muted" role="status">
+        {filtering &&
+          `Showing ${shown.length} of ${count(sessions.length, 'session')} · ${formatHours(summarize(shown).minutes)} hours`}
+      </p>
+
+      {shown.length === 0 && (
+        <div className="actions">
+          <p className="muted">No sessions match.</p>
+          <button type="button" className="button button--small" onClick={() => setFilter(NO_FILTER)}>
+            Clear filters
+          </button>
+        </div>
+      )}
+
+      <ul className="list">
+        {shown.map((session) => {
+          const label = `${SESSION_TYPE_LABELS[session.type]} session on ${formatDate(session.date)}`;
+          if (editingId === session.id) {
+            return (
+              <li key={session.id} className="list__item list__item--editing">
+                <SessionForm
+                  initial={session}
+                  defaults={sessionDefaults(sessions)}
+                  today={today}
+                  onSubmit={(input) => {
+                    const problem = onUpdate(session.id, input);
+                    if (!problem) setEditingId(null);
+                    return problem;
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
+              </li>
+            );
+          }
           return (
-            <li key={session.id} className="list__item list__item--editing">
-              <SessionForm
-                initial={session}
-                defaults={sessionDefaults(sessions)}
-                today={today}
-                onSubmit={(input) => {
-                  const problem = onUpdate(session.id, input);
-                  if (!problem) setEditingId(null);
-                  return problem;
-                }}
-                onCancel={() => setEditingId(null)}
-              />
+            <li key={session.id} className="list__item list__item--stacked">
+              <div className="list__row">
+                <div className="list__main">
+                  <strong>{formatDate(session.date)}</strong>
+                  <span className="muted">{SESSION_TYPE_LABELS[session.type]}</span>
+                </div>
+                <span className="list__value">{session.durationMinutes} min</span>
+              </div>
+              {session.notes && <p className="list__detail list__notes">{session.notes}</p>}
+              <div className="actions actions--tight">
+                <button
+                  type="button"
+                  className="button button--small"
+                  aria-label={`Edit ${label}`}
+                  onClick={() => setEditingId(session.id)}
+                >
+                  Edit
+                </button>
+                <ConfirmDelete label={label} onConfirm={() => onDelete(session.id)} />
+              </div>
             </li>
           );
-        }
-        return (
-          <li key={session.id} className="list__item list__item--stacked">
-            <div className="list__row">
-              <div className="list__main">
-                <strong>{formatDate(session.date)}</strong>
-                <span className="muted">{SESSION_TYPE_LABELS[session.type]}</span>
-              </div>
-              <span className="list__value">{session.durationMinutes} min</span>
-            </div>
-            <div className="actions actions--tight">
-              <button
-                type="button"
-                className="button button--small"
-                aria-label={`Edit ${label}`}
-                onClick={() => setEditingId(session.id)}
-              >
-                Edit
-              </button>
-              <ConfirmDelete label={label} onConfirm={() => onDelete(session.id)} />
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+        })}
+      </ul>
+    </>
   );
 }
