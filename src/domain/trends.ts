@@ -8,17 +8,22 @@ export interface WeekTotal {
   weekStart: string;
   sessions: number;
   minutes: number;
+  /** Rounds rolled, over the sessions that record them. */
+  rounds: number;
   /** True for the week containing today, which is still in progress. */
   current: boolean;
 }
 
-function totalsByWeek(sessions: Session[]): Map<string, { sessions: number; minutes: number }> {
-  const totals = new Map<string, { sessions: number; minutes: number }>();
+type Totals = Pick<WeekTotal, 'sessions' | 'minutes' | 'rounds'>;
+
+function totalsByWeek(sessions: Session[]): Map<string, Totals> {
+  const totals = new Map<string, Totals>();
   for (const session of sessions) {
     const week = weekStart(session.date);
-    const total = totals.get(week) ?? { sessions: 0, minutes: 0 };
+    const total = totals.get(week) ?? { sessions: 0, minutes: 0, rounds: 0 };
     total.sessions += 1;
     total.minutes += session.durationMinutes;
+    total.rounds += session.rounds ?? 0;
     totals.set(week, total);
   }
   return totals;
@@ -34,7 +39,7 @@ export function weeklyTotals(
   const thisWeek = weekStart(today);
   return Array.from({ length: weeks }, (_, index) => {
     const week = addDays(thisWeek, (index - (weeks - 1)) * 7);
-    const total = totals.get(week) ?? { sessions: 0, minutes: 0 };
+    const total = totals.get(week) ?? { sessions: 0, minutes: 0, rounds: 0 };
     return { weekStart: week, ...total, current: week === thisWeek };
   });
 }

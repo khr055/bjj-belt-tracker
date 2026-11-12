@@ -36,8 +36,8 @@ describe('weeklyTotals', () => {
   it('returns one entry per week, oldest first, ending with the current week', () => {
     const totals = weeklyTotals([], TODAY);
     expect(totals).toHaveLength(8);
-    expect(totals[0]).toEqual({ weekStart: '2026-09-21', sessions: 0, minutes: 0, current: false });
-    expect(totals[7]).toEqual({ weekStart: '2026-11-09', sessions: 0, minutes: 0, current: true });
+    expect(totals[0]).toEqual({ weekStart: '2026-09-21', sessions: 0, minutes: 0, rounds: 0, current: false });
+    expect(totals[7]).toEqual({ weekStart: '2026-11-09', sessions: 0, minutes: 0, rounds: 0, current: true });
   });
 
   it('counts sessions and minutes in the week they fall in', () => {

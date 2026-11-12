@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline } from './timeline';
-import type { Promotion } from './types';
+import { buildTimeline, matTimeDuring } from './timeline';
+import type { Promotion, Session } from './types';
 
 const TODAY = '2026-11-11';
 
@@ -56,5 +56,47 @@ describe('buildTimeline', () => {
       currentBeltSince: null,
     });
     expect(buildTimeline([], { belt: 'blue', stripes: 1 }, TODAY).currentRankUndated).toBe(true);
+  });
+});
+
+describe('matTimeDuring', () => {
+  const on = (date: string, durationMinutes = 60): Session => ({
+    id: date,
+    date,
+    durationMinutes,
+    type: 'gi',
+  });
+  const sessions = [
+    on('2022-02-28'),
+    on('2022-03-01', 90),
+    on('2023-01-31'),
+    on('2023-02-01'),
+    on('2025-05-10', 120),
+    on(TODAY),
+  ];
+
+  it('counts a session on a promotion day towards the new rank', () => {
+    const { entries } = buildTimeline(HISTORY, { belt: 'purple', stripes: 0 }, TODAY);
+    const totals = entries.map((entry) => {
+      const total = matTimeDuring(sessions, { ...entry, startDate: entry.promotion.date });
+      return [entry.promotion.id, total?.sessions, total?.minutes];
+    });
+    expect(totals).toEqual([
+      ['start', 1, 60],
+      ['blue', 2, 150],
+      ['blue-1', 1, 60],
+      // The current rank runs up to and including today.
+      ['purple', 2, 180],
+    ]);
+  });
+
+  it('totals a whole belt across its stripes', () => {
+    const { belts } = buildTimeline(HISTORY, { belt: 'purple', stripes: 0 }, TODAY);
+    expect(belts.map((span) => matTimeDuring(sessions, span)?.sessions)).toEqual([1, 3, 2]);
+  });
+
+  it('has no total for a stretch whose end is not known', () => {
+    const { belts } = buildTimeline(HISTORY, { belt: 'brown', stripes: 0 }, TODAY);
+    expect(matTimeDuring(sessions, belts[belts.length - 1])).toBeNull();
   });
 });

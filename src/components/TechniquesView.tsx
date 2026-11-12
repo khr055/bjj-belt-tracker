@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { formatDate } from '../domain/dates';
-import { SESSION_TYPE_LABELS } from '../domain/sessions';
+import { describeSession } from '../domain/sessions';
 import {
   activityOf,
   daysUntrained,
   groupByPosition,
   isStale,
+  landedIn,
   nextStatus,
   POSITION_LABELS,
   sessionsFor,
@@ -64,12 +65,19 @@ function describeActivity({ sessions, lastTrained }: TechniqueActivity): string 
   return `Trained in ${count(sessions, 'session')} · last on ${solidDate(lastTrained)}`;
 }
 
+/** "Landed in rolling in 3 sessions · last on 3 Nov 2026", or nothing if it never has been. */
+function describeLanded({ landed, lastLanded }: TechniqueActivity): string {
+  if (landed === 0 || lastLanded === null) return '';
+  return `Landed in rolling in ${count(landed, 'session')} · last on ${solidDate(lastLanded)}`;
+}
+
 interface HistoryProps {
-  name: string;
+  technique: Technique;
   sessions: Session[];
 }
 
-function History({ name, sessions }: HistoryProps) {
+function History({ technique, sessions }: HistoryProps) {
+  const { name } = technique;
   const [showAll, setShowAll] = useState(false);
   const shown = showAll ? sessions : sessions.slice(0, HISTORY_SIZE);
   return (
@@ -78,8 +86,9 @@ function History({ name, sessions }: HistoryProps) {
         {shown.map((session) => (
           <li key={session.id}>
             <span>
-              {formatDate(session.date)} · {SESSION_TYPE_LABELS[session.type]} ·{' '}
+              {formatDate(session.date)} · {describeSession(session)} ·{' '}
               {session.durationMinutes} min
+              {landedIn(technique, session) && ' · Landed'}
             </span>
             {session.notes && <span className="muted list__detail">{session.notes}</span>}
           </li>
@@ -149,6 +158,7 @@ export function TechniquesView({
           <strong className="list__detail">{name}</strong>
           <span className="muted list__detail">{describeStage(technique, sessions)}</span>
           <span className="muted list__detail">{describeActivity(own)}</span>
+          {own.landed > 0 && <span className="muted list__detail">{describeLanded(own)}</span>}
           {isStale(technique, own, today) && (
             <span className="list__tally">
               Not trained for {daysUntrained(technique, own, today)} days
@@ -188,7 +198,9 @@ export function TechniquesView({
           </button>
           <ConfirmDelete label={name} onConfirm={() => onDelete(id)} />
         </div>
-        {historyOpen && <History name={name} sessions={sessionsFor(technique, sessions)} />}
+        {historyOpen && (
+          <History technique={technique} sessions={sessionsFor(technique, sessions)} />
+        )}
       </li>
     );
   };

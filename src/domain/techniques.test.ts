@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addSession, filterSessions, sessionTechniques, updateSession } from './sessions';
+import {
+  addSession,
+  filterSessions,
+  sessionLanded,
+  sessionTechniques,
+  updateSession,
+} from './sessions';
 import {
   activityOf,
   addTechnique,
@@ -11,6 +17,7 @@ import {
   deleteTechnique,
   groupByPosition,
   isStale,
+  landedIn,
   MAX_TECHNIQUES,
   sortTechniques,
   statusCounts,
@@ -251,14 +258,20 @@ describe('how often and how recently a technique is trained', () => {
     expect(activityOf(activity, technique({ id: 'a' }))).toEqual({
       sessions: 3,
       lastTrained: '2026-11-05',
+      landed: 0,
+      lastLanded: null,
     });
     expect(activityOf(activity, technique({ id: 'b' }))).toEqual({
       sessions: 1,
       lastTrained: '2026-11-05',
+      landed: 0,
+      lastLanded: null,
     });
     expect(activityOf(activity, technique({ id: 'never' }))).toEqual({
       sessions: 0,
       lastTrained: null,
+      landed: 0,
+      lastLanded: null,
     });
   });
 
@@ -340,5 +353,71 @@ describe('techniqueFocus', () => {
       recent: [],
       stale: [],
     });
+  });
+});
+
+describe('techniques landed in rolling', () => {
+  const data = mustAdd(mustAdd(emptyData(), KNEE_CUT), ARMBAR);
+  const [kneeCut, armbar] = data.techniques;
+  const base = { date: TODAY, durationMinutes: 60, type: 'gi' } as const;
+
+  it('keeps the techniques landed on a session, each once, and only ones in the journal', () => {
+    const result = addSession(
+      data,
+      { ...base, techniqueIds: [kneeCut.id], landedIds: [armbar.id, 'deleted', armbar.id] },
+      TODAY,
+    );
+    if (!result.ok) throw new Error(result.error);
+    const [logged] = result.value.sessions;
+    expect(logged.landedIds).toEqual([armbar.id]);
+    expect(sessionLanded(logged, data.techniques).map((t) => t.name)).toEqual(['Armbar']);
+    expect(landedIn(armbar, logged)).toBe(true);
+    expect(landedIn(kneeCut, logged)).toBe(false);
+
+    const none = addSession(data, { ...base, landedIds: [] }, TODAY);
+    expect(none.ok && none.value.sessions[0]).not.toHaveProperty('landedIds');
+  });
+
+  it('counts landing a technique as training it, and says how often it has landed', () => {
+    const sessions: Session[] = [
+      { ...session('s1', '2026-10-01', ['a']) },
+      { ...session('s2', '2026-10-20', ['a']), landedIds: ['a'] },
+      // Landed without being ticked as worked on.
+      { ...session('s3', '2026-11-05'), landedIds: ['a', 'b'] },
+      { ...session('s4', '2026-11-09', ['a']) },
+    ];
+    const activity = techniqueActivity(sessions);
+    expect(activityOf(activity, technique({ id: 'a' }))).toEqual({
+      sessions: 4,
+      lastTrained: '2026-11-09',
+      landed: 2,
+      lastLanded: '2026-11-05',
+    });
+    expect(activityOf(activity, technique({ id: 'b' }))).toEqual({
+      sessions: 1,
+      lastTrained: '2026-11-05',
+      landed: 1,
+      lastLanded: '2026-11-05',
+    });
+    expect(sessionsFor(technique({ id: 'b' }), sessions).map((s) => s.id)).toEqual(['s3']);
+  });
+
+  it('finds a session by a technique landed in it', () => {
+    const result = addSession(data, { ...base, landedIds: [armbar.id] }, TODAY);
+    if (!result.ok) throw new Error(result.error);
+    const filter = { type: 'all', text: 'armbar' } as const;
+    expect(filterSessions(result.value.sessions, filter, data.techniques)).toHaveLength(1);
+  });
+
+  it('takes a deleted technique off the sessions it was landed in', () => {
+    const result = addSession(
+      data,
+      { ...base, techniqueIds: [kneeCut.id, armbar.id], landedIds: [armbar.id] },
+      TODAY,
+    );
+    if (!result.ok) throw new Error(result.error);
+    const [left] = deleteTechnique(result.value, armbar.id).sessions;
+    expect(left.techniqueIds).toEqual([kneeCut.id]);
+    expect(left).not.toHaveProperty('landedIds');
   });
 });

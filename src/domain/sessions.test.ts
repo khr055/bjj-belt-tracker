@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addSession,
   deleteSession,
+  describeSession,
   filterSessions,
   formatHours,
   isFiltering,
@@ -37,6 +38,10 @@ describe('addSession', () => {
     [{ date: TODAY, durationMinutes: 45.5, type: 'gi' }, 'duration'],
     [{ date: TODAY, durationMinutes: Number.NaN, type: 'gi' }, 'duration'],
     [{ date: TODAY, durationMinutes: 60, type: 'judo' }, 'gi or no-gi'],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', kind: 'seminar' }, 'kind of session'],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: -1 }, 'rounds'],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: 2.5 }, 'rounds'],
+    [{ date: TODAY, durationMinutes: 60, type: 'gi', rounds: 31 }, 'rounds'],
     [{ date: TODAY, durationMinutes: 60, type: 'gi', notes: 'x'.repeat(501) }, '500 characters'],
   ])('rejects %o', (input, message) => {
     const result = addSession(emptyData(), input as SessionInput, TODAY);
@@ -132,8 +137,12 @@ describe('ordering and defaults', () => {
       '2026-11-05',
       '2026-11-01',
     ]);
-    expect(sessionDefaults(data.sessions)).toEqual({ durationMinutes: 90, type: 'nogi' });
-    expect(sessionDefaults([])).toEqual({ durationMinutes: 60, type: 'gi' });
+    expect(sessionDefaults(data.sessions)).toEqual({
+      durationMinutes: 90,
+      type: 'nogi',
+      kind: 'class',
+    });
+    expect(sessionDefaults([])).toEqual({ durationMinutes: 60, type: 'gi', kind: 'class' });
   });
 });
 
@@ -150,7 +159,13 @@ describe('matTimeStats', () => {
     data = mustAdd(data, { date: '2026-10-20', durationMinutes: 60, type: 'nogi' });
 
     const stats = matTimeStats(data);
-    expect(stats.allTime).toEqual({ sessions: 3, minutes: 210, giSessions: 2, nogiSessions: 1 });
+    expect(stats.allTime).toEqual({
+      sessions: 3,
+      minutes: 210,
+      giSessions: 2,
+      nogiSessions: 1,
+      rounds: 0,
+    });
     expect(stats.sinceLastPromotion?.promotion.id).toBe('b1');
     expect(stats.sinceLastPromotion?.total).toMatchObject({ sessions: 2, minutes: 150 });
   });
@@ -178,5 +193,52 @@ describe('formatHours', () => {
     expect(formatHours(120)).toBe('2');
     expect(formatHours(50)).toBe('0.8');
     expect(formatHours(0)).toBe('0');
+  });
+});
+
+describe('the kind of session and rounds rolled', () => {
+  const base = { date: TODAY, durationMinutes: 60, type: 'gi' } as const;
+
+  it('keeps the kind and the rounds, and tells no rolling from not recorded', () => {
+    let data = mustAdd(emptyData(), { ...base, kind: 'open-mat', rounds: 6 });
+    data = mustAdd(data, { ...base, kind: 'drilling', rounds: 0 });
+    data = mustAdd(data, base);
+    expect(data.sessions[0]).toMatchObject({ kind: 'open-mat', rounds: 6 });
+    expect(data.sessions[1]).toMatchObject({ kind: 'drilling', rounds: 0 });
+    expect(data.sessions[2]).not.toHaveProperty('kind');
+    expect(data.sessions[2]).not.toHaveProperty('rounds');
+  });
+
+  it('describes a session by what it records', () => {
+    const session = { id: 's', ...base };
+    expect(describeSession(session)).toBe('Gi');
+    expect(describeSession({ ...session, kind: 'open-mat', rounds: 6 })).toBe(
+      'Gi · Open mat · 6 rounds',
+    );
+    expect(describeSession({ ...session, type: 'nogi', kind: 'class', rounds: 1 })).toBe(
+      'No-gi · Class · 1 round',
+    );
+    expect(describeSession({ ...session, kind: 'private', rounds: 0 })).toBe(
+      'Gi · Private lesson · 0 rounds',
+    );
+  });
+
+  it('pre-fills the kind from the last session logged', () => {
+    const data = mustAdd(emptyData(), { ...base, kind: 'open-mat', rounds: 6 });
+    expect(sessionDefaults(data.sessions).kind).toBe('open-mat');
+  });
+
+  it('totals rounds over the sessions that record them', () => {
+    let data = mustAdd(emptyData(), { ...base, rounds: 6 });
+    data = mustAdd(data, { ...base, rounds: 4 });
+    data = mustAdd(data, base);
+    expect(matTimeStats(data).allTime.rounds).toBe(10);
+  });
+
+  it('finds sessions by their kind', () => {
+    let data = mustAdd(emptyData(), { ...base, kind: 'open-mat' });
+    data = mustAdd(data, { ...base, kind: 'class' });
+    const found = filterSessions(data.sessions, { type: 'all', text: 'open mat' });
+    expect(found.map((session) => session.kind)).toEqual(['open-mat']);
   });
 });

@@ -2,8 +2,14 @@ import { useState } from 'react';
 import { formatDate, formatDuration } from '../domain/dates';
 import type { PromotionInput } from '../domain/promotions';
 import { BELT_LABELS, formatRank, nextRank } from '../domain/rank';
-import { buildTimeline, type BeltSpan, type TimelineEntry } from '../domain/timeline';
-import type { AppData, Rank } from '../domain/types';
+import { formatHours } from '../domain/sessions';
+import {
+  buildTimeline,
+  matTimeDuring,
+  type BeltSpan,
+  type TimelineEntry,
+} from '../domain/timeline';
+import type { AppData, Rank, Session } from '../domain/types';
 import { BeltGraphic } from './BeltGraphic';
 import { ConfirmDelete } from './ConfirmDelete';
 import { PromotionForm } from './PromotionForm';
@@ -32,6 +38,33 @@ function spanDuration(span: BeltSpan): string {
   if (span.endDate === null) return 'Next belt not logged';
   const length = formatDuration(span.startDate, span.endDate);
   return span.ongoing ? `${length} so far` : length;
+}
+
+/**
+ * "42 sessions · 63 hours" logged during a stretch of the timeline. Nothing when none were, since
+ * a stretch from before the app was in use was trained through all the same.
+ */
+function MatTime({
+  sessions,
+  stretch,
+}: {
+  sessions: Session[];
+  stretch: { startDate: string; endDate: string | null; ongoing: boolean };
+}) {
+  const total = matTimeDuring(sessions, stretch);
+  if (!total || total.sessions === 0) return null;
+  const hours = formatHours(total.minutes);
+  // Each half stays whole, so a narrow column breaks between them and not inside one.
+  return (
+    <span className="muted list__subvalue">
+      <span className="nowrap">
+        {total.sessions} {total.sessions === 1 ? 'session' : 'sessions'} ·
+      </span>{' '}
+      <span className="nowrap">
+        {hours} {hours === '1' ? 'hour' : 'hours'}
+      </span>
+    </span>
+  );
 }
 
 function spanDates(span: BeltSpan): string {
@@ -110,7 +143,10 @@ export function TimelineView({ data, today, onAdd, onUpdate, onDelete }: Props) 
                   <strong>{BELT_LABELS[span.belt]} belt</strong>
                   <span className="muted">{spanDates(span)}</span>
                 </div>
-                <span className="list__value">{spanDuration(span)}</span>
+                <span className="list__value">
+                  {spanDuration(span)}
+                  <MatTime sessions={data.sessions} stretch={span} />
+                </span>
               </li>
             ))}
           </ul>
@@ -150,7 +186,13 @@ export function TimelineView({ data, today, onAdd, onUpdate, onDelete }: Props) 
                       <strong>{entryTitle(entry)}</strong>
                       <span className="muted">{formatDate(promotion.date)}</span>
                     </div>
-                    <span className="list__value">{entryDuration(entry)}</span>
+                    <span className="list__value">
+                      {entryDuration(entry)}
+                      <MatTime
+                        sessions={data.sessions}
+                        stretch={{ ...entry, startDate: promotion.date }}
+                      />
+                    </span>
                   </div>
                   {credit && <p className="muted list__detail">{credit}</p>}
                   <div className="actions actions--tight">

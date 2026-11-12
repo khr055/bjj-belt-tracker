@@ -2,11 +2,13 @@ import { isIsoDate } from './dates';
 import { sortPromotions } from './promotions';
 import {
   newId,
+  SESSION_KINDS,
   SESSION_TYPES,
   type AppData,
   type Promotion,
   type Result,
   type Session,
+  type SessionKind,
   type SessionType,
   type Technique,
 } from './types';
@@ -17,8 +19,28 @@ export const MAX_SESSION_MINUTES = 600;
 export const DEFAULT_SESSION_MINUTES = 60;
 export const MAX_NOTES_LENGTH = 500;
 export const MAX_SESSION_TECHNIQUES = 20;
+export const MAX_ROUNDS = 30;
+export const DEFAULT_SESSION_KIND: SessionKind = 'class';
 
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = { gi: 'Gi', nogi: 'No-gi' };
+
+export const SESSION_KIND_LABELS: Record<SessionKind, string> = {
+  class: 'Class',
+  'open-mat': 'Open mat',
+  drilling: 'Drilling',
+  private: 'Private lesson',
+};
+
+export function isValidRounds(rounds: unknown): rounds is number {
+  return (
+    typeof rounds === 'number' && Number.isInteger(rounds) && rounds >= 0 && rounds <= MAX_ROUNDS
+  );
+}
+
+/** "1 round", "6 rounds". */
+export function formatRounds(rounds: number): string {
+  return `${rounds} ${rounds === 1 ? 'round' : 'rounds'}`;
+}
 
 export function validateSession(input: SessionInput, today: string): string | null {
   if (!isIsoDate(input.date)) return 'Enter a valid session date.';
@@ -31,11 +53,20 @@ export function validateSession(input: SessionInput, today: string): string | nu
     return `Enter a duration between 1 and ${MAX_SESSION_MINUTES} minutes.`;
   }
   if (!SESSION_TYPES.includes(input.type)) return 'Choose gi or no-gi.';
+  if (input.kind !== undefined && !SESSION_KINDS.includes(input.kind)) {
+    return 'Choose what kind of session it was.';
+  }
+  if (input.rounds !== undefined && !isValidRounds(input.rounds)) {
+    return `Enter between 0 and ${MAX_ROUNDS} rounds, or leave rounds blank.`;
+  }
   if ((input.notes ?? '').trim().length > MAX_NOTES_LENGTH) {
     return `Keep notes to ${MAX_NOTES_LENGTH} characters or fewer.`;
   }
   if (new Set(input.techniqueIds ?? []).size > MAX_SESSION_TECHNIQUES) {
     return `Choose up to ${MAX_SESSION_TECHNIQUES} techniques for a session.`;
+  }
+  if (new Set(input.landedIds ?? []).size > MAX_SESSION_TECHNIQUES) {
+    return `Choose up to ${MAX_SESSION_TECHNIQUES} techniques landed in a session.`;
   }
   return null;
 }
@@ -51,12 +82,16 @@ export function knownTechniqueIds(ids: unknown, techniques: Technique[]): string
 function pick(input: SessionInput, techniques: Technique[]): SessionInput {
   const notes = input.notes?.trim();
   const techniqueIds = knownTechniqueIds(input.techniqueIds, techniques);
+  const landedIds = knownTechniqueIds(input.landedIds, techniques);
   return {
     date: input.date,
     durationMinutes: input.durationMinutes,
     type: input.type,
+    ...(input.kind ? { kind: input.kind } : {}),
+    ...(input.rounds !== undefined ? { rounds: input.rounds } : {}),
     ...(notes ? { notes } : {}),
     ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
+    ...(landedIds.length > 0 ? { landedIds } : {}),
   };
 }
 
@@ -113,15 +148,35 @@ export function isFiltering(filter: SessionFilter): boolean {
   return filter.type !== 'all' || filter.text.trim() !== '';
 }
 
+function named(ids: string[] | undefined, techniques: Technique[]): Technique[] {
+  const byId = new Map(techniques.map((technique) => [technique.id, technique]));
+  return (ids ?? []).flatMap((id) => byId.get(id) ?? []);
+}
+
 /** The techniques a session worked on, in the order they were ticked. */
 export function sessionTechniques(session: Session, techniques: Technique[]): Technique[] {
-  const byId = new Map(techniques.map((technique) => [technique.id, technique]));
-  return (session.techniqueIds ?? []).flatMap((id) => byId.get(id) ?? []);
+  return named(session.techniqueIds, techniques);
+}
+
+/** The techniques landed in rolling in a session, in the order they were ticked. */
+export function sessionLanded(session: Session, techniques: Technique[]): Technique[] {
+  return named(session.landedIds, techniques);
+}
+
+/** "Gi · Open mat · 6 rounds", leaving out what the session does not record. */
+export function describeSession(session: Session): string {
+  return [
+    SESSION_TYPE_LABELS[session.type],
+    session.kind && SESSION_KIND_LABELS[session.kind],
+    session.rounds !== undefined && formatRounds(session.rounds),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /**
- * Keeps sessions of the chosen type where every word searched for appears in the notes or in
- * the name of a technique worked on.
+ * Keeps sessions of the chosen type where every word searched for appears in the notes, in the
+ * kind of session, or in the name of a technique worked on or landed.
  */
 export function filterSessions(
   sessions: Session[],
@@ -132,18 +187,25 @@ export function filterSessions(
   return sessions.filter((session) => {
     if (filter.type !== 'all' && session.type !== filter.type) return false;
     if (words.length === 0) return true;
-    const names = sessionTechniques(session, techniques).map((technique) => technique.name);
-    const text = [session.notes ?? '', ...names].join('\n').toLowerCase();
+    const names = [
+      ...sessionTechniques(session, techniques),
+      ...sessionLanded(session, techniques),
+    ].map((technique) => technique.name);
+    const kind = session.kind ? SESSION_KIND_LABELS[session.kind] : '';
+    const text = [session.notes ?? '', kind, ...names].join('\n').toLowerCase();
     return words.every((word) => text.includes(word));
   });
 }
 
+export type SessionDefaults = Pick<Session, 'durationMinutes' | 'type'> & { kind: SessionKind };
+
 /** Pre-fills the next session from the last one logged, so a regular class is one tap. */
-export function sessionDefaults(sessions: Session[]): Pick<Session, 'durationMinutes' | 'type'> {
+export function sessionDefaults(sessions: Session[]): SessionDefaults {
   const last = sessions[sessions.length - 1];
   return {
     durationMinutes: last?.durationMinutes ?? DEFAULT_SESSION_MINUTES,
     type: last?.type ?? 'gi',
+    kind: last?.kind ?? DEFAULT_SESSION_KIND,
   };
 }
 
@@ -152,6 +214,8 @@ export interface MatTime {
   minutes: number;
   giSessions: number;
   nogiSessions: number;
+  /** Rounds rolled, over the sessions that record them. */
+  rounds: number;
 }
 
 export function summarize(sessions: Session[]): MatTime {
@@ -161,8 +225,9 @@ export function summarize(sessions: Session[]): MatTime {
       minutes: total.minutes + s.durationMinutes,
       giSessions: total.giSessions + (s.type === 'gi' ? 1 : 0),
       nogiSessions: total.nogiSessions + (s.type === 'nogi' ? 1 : 0),
+      rounds: total.rounds + (s.rounds ?? 0),
     }),
-    { sessions: 0, minutes: 0, giSessions: 0, nogiSessions: 0 },
+    { sessions: 0, minutes: 0, giSessions: 0, nogiSessions: 0, rounds: 0 },
   );
 }
 

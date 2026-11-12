@@ -497,6 +497,16 @@ input[type='file'] {
   text-align: right;
 }
 
+/* A second, quieter line under a value, such as the mat time under a length of time. */
+.list__subvalue {
+  display: block;
+  font-weight: 400;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
 .list__detail {
   overflow-wrap: anywhere;
 }

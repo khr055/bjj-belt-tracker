@@ -10,10 +10,13 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Set and edit your current rank (white to black belt, 0 to 4 stripes).
 - Log stripe and belt promotions, including back-dated ones. Out-of-order entries are rejected.
 - See a timeline of promotions and the time spent at each belt and stripe.
+- See the sessions and hours you logged at each belt and each stripe on the timeline.
 - Log training sessions (date, duration, gi or no-gi, optional notes), and edit or delete them.
-- Filter your sessions by gi or no-gi and search their notes and the techniques worked on. Long
-  lists show the most recent 30 sessions, with more on request.
-- See sessions and hours this week, since your last promotion, and all time.
+- Say what kind of session it was (class, open mat, drilling or private lesson) and how many
+  rounds you rolled.
+- Filter your sessions by gi or no-gi and search their notes, their kind and the techniques
+  worked on or landed. Long lists show the most recent 30 sessions, with more on request.
+- See sessions, hours and rounds rolled this week, since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
 - See your time in grade against the IBJJF minimum for your belt (2 years at blue, 18 months at
@@ -30,6 +33,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Keep a technique journal: your own list of techniques, each with a position and how far along
   you are (learning, drilling, or landing it in rolling). Tick the techniques you worked on when
   you log a session, and see how often and how recently you have trained each one.
+- Tick the techniques you landed in rolling when you log a session, and see how often and how
+  recently each one has landed.
 - See what you are working on from the Overview tab, including techniques that have gone stale:
   still being learned or drilled, and not trained for 30 days.
 
@@ -40,9 +45,10 @@ Restoring shows what the file contains and what it will replace before anything 
 replaces the data on the device; it does not merge. Files that are not backups, come from a
 newer version of the app, or contain an out-of-order promotion history are refused.
 
-Backups are saved as format version 4. Version 2 added session notes, the weekly goal and
+Backups are saved as format version 5. Version 2 added session notes, the weekly goal and
 competitions; version 3 added techniques; version 4 added the day each technique reached its
-stage. Older files still restore.
+stage; version 5 added the kind of session, rounds rolled and the techniques landed in rolling.
+Older files still restore.
 
 ## Techniques
 
@@ -56,6 +62,20 @@ in one tap, dated that day; editing it to a different stage does the same. Once 
 landing in rolling, it also shows how many sessions it had been trained in by then. Techniques
 saved before stages were dated count from the day they were added. The Sessions button on a
 technique lists the sessions it was ticked on, newest first.
+
+Landing a technique in a roll is recorded on the session, separately from working on it, and
+counts as training it that day. It does not change the technique's stage: moving it to landing
+in rolling stays your call, with the sessions it landed in shown beside it as evidence.
+
+## Sessions
+
+The kind of session and the rounds rolled are optional. Sessions logged before kinds were
+recorded have none until you edit them and choose one. Rounds left blank are not recorded, which
+is different from 0 (no rolling); round totals add up only the sessions that record them.
+
+On the timeline, a session on the day of a promotion counts towards the new rank. Mat time is
+shown only for a belt or stripe with at least one session logged, since time from before you
+started logging was still trained.
 
 ## Offline and updates
 

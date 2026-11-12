@@ -4,6 +4,7 @@ import { isValidGoal } from './goals';
 import { highestPromotion } from './promotions';
 import { isValidRank, rankValue } from './rank';
 import {
+  isValidRounds,
   knownTechniqueIds,
   MAX_NOTES_LENGTH,
   MAX_SESSION_MINUTES,
@@ -16,6 +17,7 @@ import {
   MATCH_RESULTS,
   MEDALS,
   POSITIONS,
+  SESSION_KINDS,
   SESSION_TYPES,
   TECHNIQUE_STATUSES,
   type AppData,
@@ -28,6 +30,7 @@ import {
   type Promotion,
   type Rank,
   type Session,
+  type SessionKind,
   type SessionType,
   type Technique,
   type TechniqueStatus,
@@ -97,13 +100,23 @@ function toSession(value: unknown, techniques: Technique[]): Session | null {
     0,
     MAX_SESSION_TECHNIQUES,
   );
+  const landedIds = knownTechniqueIds(value.landedIds, techniques).slice(
+    0,
+    MAX_SESSION_TECHNIQUES,
+  );
+  const kind = SESSION_KINDS.includes(value.kind as SessionKind)
+    ? (value.kind as SessionKind)
+    : undefined;
   return {
     id: value.id,
     date: value.date,
     durationMinutes: minutes,
     type: value.type as SessionType,
+    ...(kind ? { kind } : {}),
+    ...(isValidRounds(value.rounds) ? { rounds: value.rounds } : {}),
     ...(notes ? { notes } : {}),
     ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
+    ...(landedIds.length > 0 ? { landedIds } : {}),
   };
 }
 

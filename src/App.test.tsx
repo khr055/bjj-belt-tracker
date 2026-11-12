@@ -221,7 +221,7 @@ describe('Training log', () => {
     expect(within(list).getByText('Knee cut passing')).toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
 
-    await user.type(within(list).getByLabelText('Search notes and techniques'), 'leg');
+    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'leg');
     expect(within(list).queryByText('Knee cut passing')).not.toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 2 sessions · 1 hours');
@@ -543,10 +543,10 @@ describe('Technique journal', () => {
 
     const list = screen.getByRole('region', { name: 'Sessions' });
     expect(list).toHaveTextContent('Worked on: Knee cut pass, Triangle');
-    await user.type(within(list).getByLabelText('Search notes and techniques'), 'triangle');
+    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'triangle');
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 1 session');
-    await user.clear(within(list).getByLabelText('Search notes and techniques'));
-    await user.type(within(list).getByLabelText('Search notes and techniques'), 'kimura');
+    await user.clear(within(list).getByLabelText('Search notes, kinds and techniques'));
+    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'kimura');
     expect(within(list).getByText('No sessions match.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Techniques' }));
@@ -569,8 +569,9 @@ describe('Technique journal', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
     const form = screen.getByRole('form', { name: 'Edit session' });
     // A ticked technique is shown even though it is no longer being worked on.
-    expect(within(form).getByRole('checkbox', { name: 'Triangle' })).toBeChecked();
-    await user.click(within(form).getByRole('checkbox', { name: 'Triangle' }));
+    const picker = within(form).getByRole('group', { name: /Techniques worked on/ });
+    expect(within(picker).getByRole('checkbox', { name: 'Triangle' })).toBeChecked();
+    await user.click(within(picker).getByRole('checkbox', { name: 'Triangle' }));
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));
     expect(stored().sessions[0].techniqueIds).toEqual(['t1']);
   });
@@ -692,6 +693,227 @@ describe('Technique journal', () => {
     expect(card).toHaveTextContent(`RecentKnee cut pass (${formatShortDate(addDays(today, -2))})`);
     expect(card).toHaveTextContent('StaleArmbar (40 days)');
     expect(card).toHaveTextContent('Stale means not trained for 30 days or more.');
+  });
+});
+
+describe('Mat time on the timeline', () => {
+  it('shows the sessions and hours logged at each belt and each rank', async () => {
+    seed({
+      rank: { belt: 'blue', stripes: 1 },
+      promotions: [
+        { id: 'start', belt: 'white', stripes: 0, date: '2022-01-10' },
+        { id: 'blue', belt: 'blue', stripes: 0, date: '2024-06-01' },
+        { id: 'blue-1', belt: 'blue', stripes: 1, date: '2025-02-01' },
+      ],
+      sessions: [
+        { id: 's1', date: '2024-05-31', durationMinutes: 60, type: 'gi' },
+        // A session on the day of a promotion counts towards the new rank.
+        { id: 's2', date: '2024-06-01', durationMinutes: 90, type: 'gi' },
+        { id: 's3', date: '2024-09-01', durationMinutes: 90, type: 'nogi' },
+        { id: 's4', date: '2025-03-01', durationMinutes: 60, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Timeline' }));
+
+    const belts = within(screen.getByRole('region', { name: 'Time at each belt' })).getAllByRole(
+      'listitem',
+    );
+    expect(belts[0]).toHaveTextContent('1 session · 1 hour');
+    expect(belts[1]).toHaveTextContent('3 sessions · 4 hours');
+
+    // Newest first.
+    const ranks = within(screen.getByRole('region', { name: 'Promotions' })).getAllByRole(
+      'listitem',
+    );
+    expect(ranks[0]).toHaveTextContent('1 session · 1 hour');
+    expect(ranks[1]).toHaveTextContent('2 sessions · 3 hours');
+    expect(ranks[2]).toHaveTextContent('1 session · 1 hour');
+  });
+
+  it('says nothing about mat time for a stretch with no sessions logged', async () => {
+    seed({
+      rank: { belt: 'blue', stripes: 0 },
+      promotions: [
+        { id: 'start', belt: 'white', stripes: 0, date: '2022-01-10' },
+        { id: 'blue', belt: 'blue', stripes: 0, date: '2024-06-01' },
+      ],
+      sessions: [{ id: 's1', date: '2024-07-01', durationMinutes: 60, type: 'gi' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Timeline' }));
+
+    const [white, blue] = within(
+      screen.getByRole('region', { name: 'Time at each belt' }),
+    ).getAllByRole('listitem');
+    expect(white).not.toHaveTextContent('session');
+    expect(blue).toHaveTextContent('1 session · 1 hour');
+  });
+});
+
+describe('Kinds of session and rounds', () => {
+  it('logs the kind and the rounds rolled and shows them in the list and the totals', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const form = screen.getByRole('form', { name: 'Log session' });
+    // A first session is taken to be a class until told otherwise.
+    expect(within(form).getByRole('radio', { name: 'Class' })).toBeChecked();
+    await user.click(within(form).getByRole('radio', { name: 'Open mat' }));
+    await user.type(within(form).getByLabelText(/Rounds rolled/), '6');
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+
+    expect(stored().sessions[0]).toMatchObject({ kind: 'open-mat', rounds: 6 });
+    // The kind carries over to the next session; the rounds belong to the one just logged.
+    expect(within(form).getByRole('radio', { name: 'Open mat' })).toBeChecked();
+    expect(within(form).getByLabelText(/Rounds rolled/)).toHaveValue(null);
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(list).toHaveTextContent('Gi · Open mat · 6 rounds');
+    await user.type(within(list).getByLabelText('Search notes, kinds and techniques'), 'open mat');
+    expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 1 session');
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByRole('group', { name: 'This week' })).toHaveTextContent('6 rounds');
+    expect(screen.getByRole('group', { name: 'All time' })).toHaveTextContent('6 rounds');
+  });
+
+  it('leaves rounds blank when none are entered, and refuses too many', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const form = screen.getByRole('form', { name: 'Log session' });
+    fireEvent.change(within(form).getByLabelText(/Rounds rolled/), { target: { value: '31' } });
+    fireEvent.submit(form);
+    expect(within(form).getByRole('alert')).toHaveTextContent('between 0 and 30 rounds');
+    expect(stored()).toBeNull();
+
+    fireEvent.change(within(form).getByLabelText(/Rounds rolled/), { target: { value: '' } });
+    fireEvent.submit(form);
+    expect(stored().sessions[0]).not.toHaveProperty('rounds');
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByRole('group', { name: 'All time' })).not.toHaveTextContent('round');
+  });
+
+  it('keeps a session from before kinds were recorded without one until it is chosen', async () => {
+    seed({ sessions: [{ id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi' }] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    let form = screen.getByRole('form', { name: 'Edit session' });
+    for (const radio of within(within(form).getByRole('group', { name: 'Kind' })).getAllByRole(
+      'radio',
+    )) {
+      expect(radio).not.toBeChecked();
+    }
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0]).not.toHaveProperty('kind');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    form = screen.getByRole('form', { name: 'Edit session' });
+    await user.click(within(form).getByRole('radio', { name: 'Drilling' }));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0]).toMatchObject({ kind: 'drilling' });
+  });
+});
+
+describe('Techniques landed in rolling', () => {
+  const KNEE_CUT: Technique = {
+    id: 't1',
+    name: 'Knee cut pass',
+    position: 'passing',
+    status: 'drilling',
+    addedOn: '2024-01-01',
+    statusSince: '2024-01-01',
+  };
+  const TRIANGLE: Technique = {
+    id: 't2',
+    name: 'Triangle',
+    position: 'guard',
+    status: 'landing',
+    addedOn: '2024-01-01',
+    statusSince: '2024-01-01',
+  };
+  const ARMBAR: Technique = {
+    id: 't3',
+    name: 'Armbar',
+    position: 'guard',
+    status: 'learning',
+    addedOn: '2024-01-01',
+    statusSince: '2024-01-01',
+  };
+
+  it('marks techniques as landed on a session and shows the evidence on each technique', async () => {
+    seed({ techniques: [KNEE_CUT, TRIANGLE, ARMBAR] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const form = screen.getByRole('form', { name: 'Log session' });
+    const worked = within(form).getByRole('group', { name: /Techniques worked on/ });
+    const landed = within(form).getByRole('group', { name: /Landed in rolling/ });
+    // What already lands is offered first, then whatever is ticked as worked on today.
+    expect(within(landed).getByRole('checkbox', { name: 'Triangle' })).toBeInTheDocument();
+    expect(within(landed).queryByRole('checkbox', { name: 'Knee cut pass' })).not.toBeInTheDocument();
+    await user.click(within(worked).getByRole('checkbox', { name: 'Knee cut pass' }));
+    await user.click(within(landed).getByRole('checkbox', { name: 'Knee cut pass' }));
+    await user.click(within(landed).getByRole('checkbox', { name: 'Triangle' }));
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+
+    expect(stored().sessions[0]).toMatchObject({ techniqueIds: ['t1'], landedIds: ['t1', 't2'] });
+    expect(within(landed).getByRole('checkbox', { name: 'Triangle' })).not.toBeChecked();
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(list).toHaveTextContent('Worked on: Knee cut pass');
+    expect(list).toHaveTextContent('Landed: Knee cut pass, Triangle');
+
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    const today = formatDate(todayIso());
+    const passing = screen.getByRole('list', { name: 'Guard passing' });
+    expect(passing).toHaveTextContent(`Landed in rolling in 1 session · last on ${today}`);
+    // Landing it counts as training it, even though it was not ticked as worked on.
+    const guard = within(screen.getByRole('list', { name: 'Guard' })).getAllByRole('listitem');
+    expect(guard[0]).toHaveTextContent('Armbar');
+    expect(guard[0]).not.toHaveTextContent('Landed in rolling in');
+    expect(guard[1]).toHaveTextContent(`Trained in 1 session · last on ${today}`);
+    expect(guard[1]).toHaveTextContent(`Landed in rolling in 1 session · last on ${today}`);
+
+    await user.click(screen.getByRole('button', { name: 'Sessions for Triangle' }));
+    expect(screen.getByRole('list', { name: 'Sessions for Triangle' })).toHaveTextContent(
+      '60 min · Landed',
+    );
+  });
+
+  it('takes a technique off the landed list when a session is edited', async () => {
+    seed({
+      techniques: [KNEE_CUT, TRIANGLE],
+      sessions: [
+        {
+          id: 's1',
+          date: '2024-05-01',
+          durationMinutes: 60,
+          type: 'gi',
+          techniqueIds: ['t1'],
+          landedIds: ['t1', 't2'],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const form = screen.getByRole('form', { name: 'Edit session' });
+    const landed = within(form).getByRole('group', { name: /Landed in rolling/ });
+    await user.click(within(landed).getByRole('checkbox', { name: 'Triangle' }));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0]).toMatchObject({ techniqueIds: ['t1'], landedIds: ['t1'] });
   });
 });
 

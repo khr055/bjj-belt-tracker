@@ -148,9 +148,18 @@ export function setTechniqueStatus(
   };
 }
 
-/** The sessions a technique was ticked on, newest first. */
+/** Whether the technique was landed in rolling in the session. */
+export function landedIn(technique: Technique, session: Session): boolean {
+  return session.landedIds?.includes(technique.id) ?? false;
+}
+
+/** The sessions a technique was worked on or landed in, newest first. */
 export function sessionsFor(technique: Technique, sessions: Session[]): Session[] {
-  return sortSessions(sessions.filter((session) => session.techniqueIds?.includes(technique.id)));
+  return sortSessions(
+    sessions.filter(
+      (session) => session.techniqueIds?.includes(technique.id) || landedIn(technique, session),
+    ),
+  );
 }
 
 /**
@@ -166,14 +175,20 @@ export function sessionsToLand(technique: Technique, sessions: Session[]): numbe
 
 /** Deleting a technique also takes it off the sessions it was ticked on. The sessions stay. */
 export function deleteTechnique(data: AppData, id: string): AppData {
+  const without = (ids: string[] | undefined) => ids?.filter((other) => other !== id) ?? [];
   return {
     ...data,
     techniques: data.techniques.filter((technique) => technique.id !== id),
     sessions: data.sessions.map((session) => {
-      if (!session.techniqueIds?.includes(id)) return session;
-      const { techniqueIds, ...rest } = session;
-      const left = techniqueIds.filter((techniqueId) => techniqueId !== id);
-      return left.length > 0 ? { ...rest, techniqueIds: left } : rest;
+      if (!session.techniqueIds?.includes(id) && !session.landedIds?.includes(id)) return session;
+      const { techniqueIds, landedIds, ...rest } = session;
+      const worked = without(techniqueIds);
+      const landed = without(landedIds);
+      return {
+        ...rest,
+        ...(worked.length > 0 ? { techniqueIds: worked } : {}),
+        ...(landed.length > 0 ? { landedIds: landed } : {}),
+      };
     }),
   };
 }
@@ -208,26 +223,44 @@ export function statusCounts(techniques: Technique[]): StatusCounts {
 }
 
 export interface TechniqueActivity {
-  /** Sessions the technique was ticked on. */
+  /** Sessions the technique was worked on or landed in. */
   sessions: number;
   /** The date of the most recent of them, or null when there are none. */
   lastTrained: string | null;
+  /** Sessions the technique was landed in rolling. */
+  landed: number;
+  /** The date of the most recent of those, or null when there are none. */
+  lastLanded: string | null;
 }
 
-const NO_ACTIVITY: TechniqueActivity = { sessions: 0, lastTrained: null };
+const NO_ACTIVITY: TechniqueActivity = {
+  sessions: 0,
+  lastTrained: null,
+  landed: 0,
+  lastLanded: null,
+};
 
-/** How often and how recently each technique has been trained, by technique id. */
+function later(soFar: string | null, date: string): string {
+  return soFar !== null && soFar > date ? soFar : date;
+}
+
+/**
+ * How often and how recently each technique has been trained and landed, by technique id.
+ * Landing a technique in a roll counts as training it, whether or not it was also ticked as
+ * worked on.
+ */
 export function techniqueActivity(sessions: Session[]): Map<string, TechniqueActivity> {
   const activity = new Map<string, TechniqueActivity>();
   for (const session of sessions) {
-    for (const id of new Set(session.techniqueIds ?? [])) {
+    const landed = new Set(session.landedIds ?? []);
+    for (const id of new Set([...(session.techniqueIds ?? []), ...landed])) {
       const soFar = activity.get(id) ?? NO_ACTIVITY;
+      const didLand = landed.has(id);
       activity.set(id, {
         sessions: soFar.sessions + 1,
-        lastTrained:
-          soFar.lastTrained !== null && soFar.lastTrained > session.date
-            ? soFar.lastTrained
-            : session.date,
+        lastTrained: later(soFar.lastTrained, session.date),
+        landed: soFar.landed + (didLand ? 1 : 0),
+        lastLanded: didLand ? later(soFar.lastLanded, session.date) : soFar.lastLanded,
       });
     }
   }
@@ -252,7 +285,7 @@ export function isWorkingOn(technique: Technique): boolean {
  */
 export function daysUntrained(
   technique: Technique,
-  activity: TechniqueActivity,
+  activity: Pick<TechniqueActivity, 'lastTrained'>,
   today: string,
 ): number {
   const { lastTrained } = activity;
@@ -262,7 +295,11 @@ export function daysUntrained(
 }
 
 /** Stale means still being worked on, and not trained for 30 days. */
-export function isStale(technique: Technique, activity: TechniqueActivity, today: string): boolean {
+export function isStale(
+  technique: Technique,
+  activity: Pick<TechniqueActivity, 'lastTrained'>,
+  today: string,
+): boolean {
   return isWorkingOn(technique) && daysUntrained(technique, activity, today) >= STALE_DAYS;
 }
 

@@ -180,6 +180,37 @@ describe('backup files', () => {
     expect(result.ok && result.value.skipped).toBe(0);
   });
 
+  it('keeps the kind, rounds and landed techniques a version 5 backup holds', () => {
+    const [first] = DATA.techniques;
+    const sessions = [
+      {
+        id: 's1',
+        date: '2026-11-01',
+        durationMinutes: 90,
+        type: 'nogi',
+        kind: 'open-mat',
+        rounds: 6,
+        landedIds: [first.id],
+      },
+      // What cannot be right is dropped from the session; the session is kept.
+      {
+        id: 's2',
+        date: '2026-11-02',
+        durationMinutes: 60,
+        type: 'gi',
+        kind: 'seminar',
+        rounds: 99,
+        landedIds: ['gone'],
+      },
+    ];
+    const result = readBackup(file({ version: 5, data: { ...DATA, sessions } }), TODAY);
+    expect(result.ok && result.value.data.sessions).toEqual([
+      sessions[0],
+      { id: 's2', date: '2026-11-02', durationMinutes: 60, type: 'gi' },
+    ]);
+    expect(result.ok && result.value.skipped).toBe(0);
+  });
+
   it('saves backups in the current version', () => {
     expect(JSON.parse(createBackupText(DATA, SAVED_AT)).version).toBe(BACKUP_VERSION);
   });

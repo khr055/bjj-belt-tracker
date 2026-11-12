@@ -12,11 +12,12 @@ interface Props {
 
 interface TileProps {
   label: string;
-  total: { sessions: number; minutes: number };
+  total: { sessions: number; minutes: number; rounds: number };
   detail: string;
 }
 
 function Tile({ label, total, detail }: TileProps) {
+  const { rounds } = total;
   return (
     <div className="stat" role="group" aria-label={label}>
       <p className="eyebrow">{label}</p>
@@ -27,6 +28,14 @@ function Tile({ label, total, detail }: TileProps) {
           ·
         </span>
         <span className="stat__number">{formatHours(total.minutes)}</span> hours
+        {rounds > 0 && (
+          <>
+            <span className="stat__divider" aria-hidden="true">
+              ·
+            </span>
+            <span className="stat__number">{rounds}</span> {rounds === 1 ? 'round' : 'rounds'}
+          </>
+        )}
       </p>
       <p className="muted">{detail}</p>
     </div>

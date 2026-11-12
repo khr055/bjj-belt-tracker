@@ -1,13 +1,26 @@
 import { useId, useState, type FormEvent } from 'react';
-import { MAX_NOTES_LENGTH, SESSION_TYPE_LABELS, type SessionInput } from '../domain/sessions';
-import { SESSION_TYPES, type Session, type SessionType, type Technique } from '../domain/types';
+import {
+  MAX_NOTES_LENGTH,
+  MAX_ROUNDS,
+  SESSION_KIND_LABELS,
+  SESSION_TYPE_LABELS,
+  type SessionDefaults,
+  type SessionInput,
+} from '../domain/sessions';
+import {
+  SESSION_KINDS,
+  SESSION_TYPES,
+  type Session,
+  type SessionType,
+  type Technique,
+} from '../domain/types';
 import { TechniquePicker } from './TechniquePicker';
 
 interface Props {
   /** The session being edited; omit to log a new one. */
   initial?: Session;
-  /** Duration and type pre-filled for a new session. */
-  defaults: Pick<Session, 'durationMinutes' | 'type'>;
+  /** Duration, type and kind pre-filled for a new session. */
+  defaults: SessionDefaults;
   /** The journal, so the techniques worked on can be ticked. */
   techniques: Technique[];
   today: string;
@@ -22,22 +35,38 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
   const [date, setDate] = useState(initial?.date ?? today);
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? defaults.durationMinutes));
   const [type, setType] = useState<SessionType>(initial?.type ?? defaults.type);
+  // A session saved before kinds were recorded keeps none until one is chosen.
+  const [kind, setKind] = useState(initial ? initial.kind : defaults.kind);
+  const [rounds, setRounds] = useState(initial?.rounds === undefined ? '' : String(initial.rounds));
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [techniqueIds, setTechniqueIds] = useState(initial?.techniqueIds ?? []);
+  const [landedIds, setLandedIds] = useState(initial?.landedIds ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const minutes = Number(duration);
-    const problem = onSubmit({ date, durationMinutes: minutes, type, notes, techniqueIds });
+    const problem = onSubmit({
+      date,
+      durationMinutes: minutes,
+      type,
+      kind,
+      rounds: rounds.trim() === '' ? undefined : Number(rounds),
+      notes,
+      techniqueIds,
+      landedIds,
+    });
     setError(problem);
-    // A new session keeps its date, duration and type so the next class can be logged straight
-    // away. The notes and techniques belong to the class just logged, so they are cleared.
+    // A new session keeps its date, duration, type and kind so the next class can be logged
+    // straight away. The rounds, notes and techniques belong to the class just logged, so they
+    // are cleared.
     setSaved(problem || initial ? null : `Logged ${minutes} min ${SESSION_TYPE_LABELS[type]} session.`);
     if (!problem && !initial) {
+      setRounds('');
       setNotes('');
       setTechniqueIds([]);
+      setLandedIds([]);
     }
   };
 
@@ -99,7 +128,48 @@ export function SessionForm({ initial, defaults, techniques, today, onSubmit, on
           ))}
         </div>
       </fieldset>
+      <fieldset className="choices">
+        <legend>Kind</legend>
+        <div className="choices__row">
+          {SESSION_KINDS.map((option) => (
+            <label key={option} className="chip">
+              <input
+                type="radio"
+                name={`${id}-kind`}
+                checked={kind === option}
+                onChange={() => setKind(option)}
+              />
+              {SESSION_KIND_LABELS[option]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="field">
+        <label htmlFor={`${id}-rounds`}>
+          Rounds rolled <span className="muted">(optional)</span>
+        </label>
+        <input
+          id={`${id}-rounds`}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_ROUNDS}
+          step={1}
+          value={rounds}
+          onChange={(event) => setRounds(event.target.value)}
+        />
+      </div>
       <TechniquePicker techniques={techniques} selected={techniqueIds} onChange={setTechniqueIds} />
+      <TechniquePicker
+        techniques={techniques}
+        selected={landedIds}
+        onChange={setLandedIds}
+        legend="Landed in rolling"
+        // What was worked on today, and what already lands, are the likely ones.
+        likely={(technique) =>
+          techniqueIds.includes(technique.id) || technique.status === 'landing'
+        }
+      />
       <div className="field">
         <label htmlFor={`${id}-notes`}>
           Notes <span className="muted">(optional)</span>

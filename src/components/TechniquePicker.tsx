@@ -6,21 +6,31 @@ interface Props {
   techniques: Technique[];
   selected: string[];
   onChange(ids: string[]): void;
+  /** What ticking a technique means here. */
+  legend?: string;
+  /** The techniques offered before the rest are asked for. Defaults to those being worked on. */
+  likely?(technique: Technique): boolean;
 }
 
 /**
- * Ticks the techniques a session worked on. The ones being worked on are offered first, since
- * those are the likely ones; the rest are a tap away.
+ * Ticks techniques on a session. The likely ones are offered first (by default, those being
+ * worked on); the rest are a tap away.
  */
-export function TechniquePicker({ techniques, selected, onChange }: Props) {
+export function TechniquePicker({
+  techniques,
+  selected,
+  onChange,
+  legend = 'Techniques worked on',
+  likely = isWorkingOn,
+}: Props) {
   const [showAll, setShowAll] = useState(false);
   if (techniques.length === 0) return null;
 
   const sorted = sortTechniques(techniques);
   const offered = sorted.filter(
-    (technique) => isWorkingOn(technique) || selected.includes(technique.id),
+    (technique) => likely(technique) || selected.includes(technique.id),
   );
-  // With nothing being worked on there would be nothing to tick, so everything is shown.
+  // With nothing likely there would be nothing to tick, so everything is shown.
   const everything = showAll || offered.length === 0;
   const shown = everything ? sorted : offered;
   const hidden = sorted.length - shown.length;
@@ -31,7 +41,7 @@ export function TechniquePicker({ techniques, selected, onChange }: Props) {
   return (
     <fieldset className="choices">
       <legend>
-        Techniques worked on <span className="muted">(optional)</span>
+        {legend} <span className="muted">(optional)</span>
       </legend>
       <div className="choices__row">
         {shown.map((technique) => (

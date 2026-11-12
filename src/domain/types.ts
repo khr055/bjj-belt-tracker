@@ -19,14 +19,24 @@ export interface Promotion extends Rank {
 export const SESSION_TYPES = ['gi', 'nogi'] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
 
+/** What the time on the mat was spent on. */
+export const SESSION_KINDS = ['class', 'open-mat', 'drilling', 'private'] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
 export interface Session {
   id: string;
   date: string;
   durationMinutes: number;
   type: SessionType;
+  /** Left out on sessions logged before kinds were recorded. */
+  kind?: SessionKind;
+  /** Rounds of sparring. Left out when not recorded; 0 means no rolling. */
+  rounds?: number;
   notes?: string;
   /** The techniques worked on, by id. Left out when there are none. */
   techniqueIds?: string[];
+  /** The techniques landed in rolling, by id. Left out when there are none. */
+  landedIds?: string[];
 }
 
 export const POSITIONS = [

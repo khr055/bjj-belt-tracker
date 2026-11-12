@@ -1,6 +1,29 @@
 import { sortPromotions } from './promotions';
 import { rankValue } from './rank';
-import { BELTS, type Belt, type Promotion, type Rank } from './types';
+import { summarize, type MatTime } from './sessions';
+import { BELTS, type Belt, type Promotion, type Rank, type Session } from './types';
+
+/** A stretch of the timeline: a rank or a belt, from the day it began. */
+interface Stretch {
+  startDate: string;
+  endDate: string | null;
+  ongoing: boolean;
+}
+
+/**
+ * Mat time logged during a stretch of the timeline, or null when its end is not known. A session
+ * on the day of a promotion counts towards the new rank, as it does everywhere else.
+ */
+export function matTimeDuring(sessions: Session[], stretch: Stretch): MatTime | null {
+  const { startDate, endDate, ongoing } = stretch;
+  if (endDate === null) return null;
+  return summarize(
+    sessions.filter(
+      (session) =>
+        session.date >= startDate && (ongoing ? session.date <= endDate : session.date < endDate),
+    ),
+  );
+}
 
 export interface TimelineEntry {
   promotion: Promotion;

@@ -6,9 +6,10 @@ import type { AppData, Result } from './types';
 export const BACKUP_FORMAT = 'bjj-belt-tracker-backup';
 /**
  * Version 2 added session notes, the weekly goal and competitions. Version 3 added techniques.
- * Version 4 added the day each technique reached its stage. Older files still restore.
+ * Version 4 added the day each technique reached its stage. Version 5 added the kind of session,
+ * rounds rolled and the techniques landed in rolling. Older files still restore.
  */
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 
 const NOT_A_BACKUP = "That file isn't a Belt Tracker backup.";
 

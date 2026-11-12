@@ -1,11 +1,13 @@
 import { useId, useState } from 'react';
 import { formatDate } from '../domain/dates';
 import {
+  describeSession,
   filterSessions,
   formatHours,
   isFiltering,
   NO_FILTER,
   sessionDefaults,
+  sessionLanded,
   SESSION_TYPE_LABELS,
   sessionTechniques,
   sortSessions,
@@ -73,7 +75,7 @@ export function SessionList({ sessions, techniques, today, onUpdate, onDelete }:
           ))}
         </div>
         <div className="field">
-          <label htmlFor={searchId}>Search notes and techniques</label>
+          <label htmlFor={searchId}>Search notes, kinds and techniques</label>
           <input
             id={searchId}
             type="search"
@@ -120,18 +122,24 @@ export function SessionList({ sessions, techniques, today, onUpdate, onDelete }:
             );
           }
           const workedOn = sessionTechniques(session, techniques);
+          const landed = sessionLanded(session, techniques);
           return (
             <li key={session.id} className="list__item list__item--stacked">
               <div className="list__row">
                 <div className="list__main">
                   <strong>{formatDate(session.date)}</strong>
-                  <span className="muted">{SESSION_TYPE_LABELS[session.type]}</span>
+                  <span className="muted">{describeSession(session)}</span>
                 </div>
                 <span className="list__value">{session.durationMinutes} min</span>
               </div>
               {workedOn.length > 0 && (
                 <p className="muted list__detail">
                   Worked on: {workedOn.map((technique) => technique.name).join(', ')}
+                </p>
+              )}
+              {landed.length > 0 && (
+                <p className="muted list__detail">
+                  Landed: {landed.map((technique) => technique.name).join(', ')}
                 </p>
               )}
               {session.notes && <p className="list__detail list__notes">{session.notes}</p>}
