@@ -1916,3 +1916,214 @@ describe('Backup and restore', () => {
     expect(stored()).toEqual(HISTORY);
   });
 });
+
+describe('Training calendar', () => {
+  // Built from the same string helpers the app uses, so the tests hold on any day they run.
+  const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  const monthTitle = (date: string) =>
+    `${MONTH_NAMES[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+  const longDate = (date: string) => `${Number(date.slice(8, 10))} ${monthTitle(date)}`;
+  const firstOfMonth = (date: string) => `${date.slice(0, 7)}-01`;
+  /** The 1st of the month a number of months away from this one. */
+  const monthAway = (months: number) => {
+    let first = firstOfMonth(todayIso());
+    for (let step = 0; step < Math.abs(months); step += 1) {
+      // Into the next month from the 1st, or the previous one from the day before it.
+      first = firstOfMonth(addDays(first, months > 0 ? 31 : -1));
+    }
+    return first;
+  };
+
+  async function openCalendar() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    return { user, card: screen.getByRole('region', { name: 'Calendar' }) };
+  }
+
+  it('shows this month with what is on each day, and the details of the day chosen', async () => {
+    const today = todayIso();
+    // Another day of this month with nothing on it.
+    const quiet = today.endsWith('-01') ? addDays(today, 1) : addDays(today, -1);
+    seed({
+      rank: { belt: 'blue', stripes: 1 },
+      promotions: [{ id: 'p1', belt: 'blue', stripes: 1, date: today }],
+      sessions: [
+        { id: 's1', date: today, durationMinutes: 90, type: 'gi', kind: 'class', rounds: 6 },
+        { id: 's2', date: today, durationMinutes: 60, type: 'nogi' },
+      ],
+      competitions: [{ id: 'c1', date: today, name: 'Autumn Open', type: 'gi', matches: [] }],
+      timeOff: [{ id: 't1', startDate: today, reason: 'injury' }],
+    });
+    const before = stored();
+    const { user, card } = await openCalendar();
+
+    expect(within(card).getByRole('heading', { name: monthTitle(today) })).toBeInTheDocument();
+    expect(card).toHaveTextContent('2 sessions · 2.5 hours · 6 rounds');
+
+    const grid = within(card).getByRole('grid', { name: `Training calendar, ${monthTitle(today)}` });
+    expect(
+      within(grid)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+    // Every day of the month has a button, and the first sits under its weekday.
+    const first = firstOfMonth(today);
+    const dayButtons = within(grid).getAllByRole('button');
+    expect(dayButtons).toHaveLength(Number(addDays(monthAway(1), -1).slice(8, 10)));
+    const firstRow = within(grid).getAllByRole('row')[1];
+    const blanks = within(firstRow)
+      .getAllByRole('cell')
+      .filter((cell) => cell.textContent === '');
+    expect(blanks).toHaveLength((new Date(`${first}T12:00:00`).getDay() + 6) % 7);
+
+    const todayButton = within(grid).getByRole('button', {
+      name: `${longDate(today)} (today): 2 sessions, time off, promotion, competition`,
+    });
+    const quietButton = within(grid).getByRole('button', {
+      name: `${longDate(quiet)}: nothing logged`,
+    });
+    expect(todayButton).toHaveAttribute('aria-pressed', 'false');
+    expect(card).toHaveTextContent('Choose a day to see what is on it.');
+
+    await user.click(todayButton);
+    expect(todayButton).toHaveAttribute('aria-pressed', 'true');
+    const details = within(card).getByRole('group', { name: longDate(today) });
+    const items = within(details)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+    expect(items).toEqual([
+      '★ Promotion: Blue belt, 1 stripe',
+      '◆ Competition: Autumn Open',
+      'Gi · Class · 6 rounds · 90 min',
+      'No-gi · 60 min',
+      'Time off (injury)',
+    ]);
+
+    // Another day takes the selection; a day with nothing on it says so.
+    await user.click(quietButton);
+    expect(todayButton).toHaveAttribute('aria-pressed', 'false');
+    expect(quietButton).toHaveAttribute('aria-pressed', 'true');
+    expect(within(card).queryByRole('group', { name: longDate(today) })).not.toBeInTheDocument();
+    expect(within(card).getByRole('group', { name: longDate(quiet) })).toHaveTextContent(
+      'Nothing logged',
+    );
+
+    // Choosing the same day again closes it.
+    await user.click(quietButton);
+    expect(quietButton).toHaveAttribute('aria-pressed', 'false');
+    expect(within(card).queryByRole('group', { name: longDate(quiet) })).not.toBeInTheDocument();
+
+    // Looking at the calendar stores nothing.
+    expect(stored()).toEqual(before);
+  });
+
+  it('moves to earlier and later months, with planned time off and competitions to come', async () => {
+    const today = todayIso();
+    const lastMonth = monthAway(-1);
+    const nextMonth = monthAway(1);
+    const tripStart = addDays(nextMonth, 2);
+    const tripEnd = addDays(nextMonth, 4);
+    const comp = addDays(nextMonth, 9);
+    seed({
+      sessions: [{ id: 's1', date: lastMonth, durationMinutes: 60, type: 'gi' }],
+      competitions: [{ id: 'c1', date: comp, name: 'Winter Open', type: 'nogi', matches: [] }],
+      timeOff: [
+        { id: 't1', startDate: tripStart, endDate: tripEnd, reason: 'travel' },
+        // Still to start and with no last day: nothing is known about it yet.
+        { id: 't2', startDate: addDays(nextMonth, 20), reason: 'other' },
+      ],
+    });
+    const { user, card } = await openCalendar();
+
+    expect(card).toHaveTextContent('No sessions this month');
+    expect(within(card).queryByRole('button', { name: 'This month' })).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: 'Previous month' }));
+    expect(within(card).getByRole('heading', { name: monthTitle(lastMonth) })).toBeInTheDocument();
+    expect(card).toHaveTextContent('1 session · 1 hour');
+    expect(
+      within(card).getByRole('grid', { name: `Training calendar, ${monthTitle(lastMonth)}` }),
+    ).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: `${longDate(lastMonth)}: 1 session` }));
+    expect(within(card).getByRole('group', { name: longDate(lastMonth) })).toHaveTextContent(
+      'Gi · 60 min',
+    );
+
+    // Changing month closes the day that was open.
+    await user.click(within(card).getByRole('button', { name: 'Next month' }));
+    expect(within(card).getByRole('heading', { name: monthTitle(today) })).toBeInTheDocument();
+    expect(within(card).queryByRole('group', { name: longDate(lastMonth) })).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: 'Next month' }));
+    expect(within(card).getByRole('heading', { name: monthTitle(nextMonth) })).toBeInTheDocument();
+    for (const date of [tripStart, addDays(tripStart, 1), tripEnd]) {
+      expect(
+        within(card).getByRole('button', { name: `${longDate(date)}: time off` }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(card).getByRole('button', { name: `${longDate(addDays(tripEnd, 1))}: nothing logged` }),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByRole('button', {
+        name: `${longDate(addDays(nextMonth, 20))}: nothing logged`,
+      }),
+    ).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: `${longDate(comp)}: competition` }));
+    expect(within(card).getByRole('group', { name: longDate(comp) })).toHaveTextContent(
+      'Competition: Winter Open',
+    );
+    await user.click(within(card).getByRole('button', { name: `${longDate(tripStart)}: time off` }));
+    expect(within(card).getByRole('group', { name: longDate(tripStart) })).toHaveTextContent(
+      'Time off (travel)',
+    );
+
+    await user.click(within(card).getByRole('button', { name: 'This month' }));
+    expect(within(card).getByRole('heading', { name: monthTitle(today) })).toBeInTheDocument();
+    expect(
+      within(card).getByRole('button', { name: `${longDate(today)} (today): nothing logged` }),
+    ).toBeInTheDocument();
+  });
+
+  it('reaches every day from the keyboard, with one stop for Tab', async () => {
+    const today = todayIso();
+    const { user, card } = await openCalendar();
+    const grid = within(card).getByRole('grid');
+
+    // Only today takes Tab; the arrow keys move between days.
+    const tabbable = within(grid)
+      .getAllByRole('button')
+      .filter((button) => button.tabIndex === 0);
+    expect(tabbable).toHaveLength(1);
+    expect(tabbable[0]).toHaveAccessibleName(`${longDate(today)} (today): nothing logged`);
+
+    tabbable[0].focus();
+    await user.keyboard('{ArrowDown}');
+    const nextWeek = addDays(today, 7);
+    expect(document.activeElement).toHaveAccessibleName(`${longDate(nextWeek)}: nothing logged`);
+    expect(within(card).getByRole('heading', { name: monthTitle(nextWeek) })).toBeInTheDocument();
+
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(document.activeElement).toHaveAccessibleName(
+      `${longDate(today)} (today): nothing logged`,
+    );
+    expect(document.activeElement).toHaveAttribute('aria-pressed', 'true');
+    expect(within(card).getByRole('group', { name: longDate(today) })).toHaveTextContent(
+      'Nothing logged',
+    );
+  });
+});

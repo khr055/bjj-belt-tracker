@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BackupReminder } from './components/BackupReminder';
 import { BackupView } from './components/BackupView';
+import { CalendarCard } from './components/CalendarCard';
 import { CaughtCard } from './components/CaughtCard';
 import { CompetitionRecordCard } from './components/CompetitionRecordCard';
 import { CompetitionsView } from './components/CompetitionsView';
@@ -136,6 +137,7 @@ export default function App() {
               today={today}
               onSetGoal={actions.setWeeklyGoal}
             />
+            <CalendarCard data={data} today={today} />
             <TimeOffCard
               timeOff={data.timeOff}
               sessions={data.sessions}

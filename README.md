@@ -35,6 +35,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Log competitions and their matches (win, loss or draw, and how each was decided), and see your
   overall record, how you win and lose, and your medals. A win by submission can name the
   technique from your journal, which then shows the matches it has won.
+- See a calendar of your training month by month: how many sessions you logged each day, with
+  time off, promotions and competitions marked. Choose a day to see what was on it.
 - Add a competition you have entered with a future date and see a countdown to it. Matches and a
   medal can be added from the day.
 - Get a reminder on the Overview tab when your history has not been backed up for 30 days, or
@@ -125,6 +127,25 @@ the day before that session, since until it ends every week counts as off.
 - **This week's goal:** the Overview says the goal is not counted in a week with time off.
 
 Time off does not change your time in grade or your mat time.
+
+## Calendar
+
+The Training tab shows one month at a time, with weeks starting on Monday. It opens on the
+current month; the arrows move a month back or forward, including into months still to come,
+where planned time off and competitions you have entered appear. Under the month's name are
+the sessions and hours logged in it, and the rounds rolled when any are recorded.
+
+Each day shows the number of sessions logged, a star for a promotion and a diamond for a
+competition. Days of time off are hatched, and today's number is filled in. Time off with no
+last day is hatched up to today and no further; time off planned with a last day is hatched on
+all of its days. Choose a day to list its sessions, promotion, competition and time off below
+the grid; choose it again to close it.
+
+From a keyboard, Tab reaches one day of the month and the arrow keys move between days. Home
+and End go to the Monday and Sunday of the week, and Page Up and Page Down move by a month.
+
+The calendar only shows what is already recorded. It stores nothing of its own, so backups are
+unchanged.
 
 ## Black belt degrees
 

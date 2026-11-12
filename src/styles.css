@@ -875,3 +875,171 @@ input[type='file'] {
 .chart-table th:first-child {
   text-align: left;
 }
+
+/* Month calendar */
+.calendar__header {
+  /* Room for the "This month" button, so the grid does not jump when it appears. */
+  min-height: 36px;
+}
+
+.calendar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar__month {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.calendar__summary {
+  text-align: center;
+}
+
+.calendar__step {
+  flex: none;
+  width: 44px;
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.calendar {
+  width: 100%;
+  border-spacing: 2px;
+  /* Seven equal columns whatever the cells hold, so the grid never grows wider than the card. */
+  table-layout: fixed;
+}
+
+.calendar th {
+  padding: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.calendar abbr {
+  text-decoration: none;
+}
+
+.calendar td {
+  padding: 0;
+}
+
+.calendar__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* A day off is hatched, as weeks off are on the chart, so it does not rest on colour. */
+.calendar__day--off {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--muted) 38%, transparent) 4px 6px
+    ),
+    var(--bg);
+}
+
+.calendar__day[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.calendar__number {
+  min-width: 1.6em;
+  padding: 0 4px;
+  border-radius: 999px;
+  line-height: 1.6;
+}
+
+/* Today's number sits in a filled pill. */
+.calendar__day--today .calendar__number {
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 700;
+}
+
+.calendar__marks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 16px;
+  line-height: 1;
+}
+
+.calendar__count {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.calendar__mark {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.calendar__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  list-style: none;
+}
+
+.calendar__key li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calendar__key .calendar__mark {
+  color: var(--text);
+}
+
+.calendar__swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.calendar__details-title {
+  font-size: 0.95rem;
+}
+
+.calendar__details ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
