@@ -8,6 +8,8 @@ import { NextCompetitionCard } from './components/NextCompetitionCard';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
 import { SessionList } from './components/SessionList';
+import { TechniqueFocusCard } from './components/TechniqueFocusCard';
+import { TechniquesView } from './components/TechniquesView';
 import { TimeInGradeCard } from './components/TimeInGradeCard';
 import { TimelineView } from './components/TimelineView';
 import { nextCompetition, pastCompetitions } from './domain/competitions';
@@ -21,6 +23,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'training', label: 'Training' },
+  { id: 'techniques', label: 'Techniques' },
   { id: 'compete', label: 'Compete' },
   { id: 'backup', label: 'Backup' },
 ] as const;
@@ -76,6 +79,13 @@ export default function App() {
               <TimeInGradeCard rank={data.rank} promotions={data.promotions} today={today} />
             )}
             <MatTimeStats data={data} today={today} />
+            {data.techniques.length > 0 && (
+              <TechniqueFocusCard
+                techniques={data.techniques}
+                sessions={data.sessions}
+                today={today}
+              />
+            )}
             {hasCompeted && (
               <CompetitionRecordCard competitions={data.competitions} today={today} />
             )}
@@ -83,6 +93,7 @@ export default function App() {
               <h2 id="quick-log-heading">Log a session</h2>
               <SessionForm
                 defaults={defaults}
+                techniques={data.techniques}
                 today={today}
                 onSubmit={(input) => actions.addSession(input, today)}
               />
@@ -106,6 +117,7 @@ export default function App() {
               <h2 id="log-heading">Log a session</h2>
               <SessionForm
                 defaults={defaults}
+                techniques={data.techniques}
                 today={today}
                 onSubmit={(input) => actions.addSession(input, today)}
               />
@@ -120,12 +132,24 @@ export default function App() {
               <h2 id="sessions-heading">Sessions</h2>
               <SessionList
                 sessions={data.sessions}
+                techniques={data.techniques}
                 today={today}
                 onUpdate={(id, input) => actions.updateSession(id, input, today)}
                 onDelete={actions.deleteSession}
               />
             </section>
           </>
+        )}
+
+        {tab === 'techniques' && (
+          <TechniquesView
+            techniques={data.techniques}
+            sessions={data.sessions}
+            today={today}
+            onAdd={(input) => actions.addTechnique(input, today)}
+            onUpdate={actions.updateTechnique}
+            onDelete={actions.deleteTechnique}
+          />
         )}
 
         {tab === 'compete' && (

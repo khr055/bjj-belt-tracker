@@ -18,6 +18,12 @@ import {
   type PromotionInput,
 } from '../domain/promotions';
 import { addSession, deleteSession, updateSession, type SessionInput } from '../domain/sessions';
+import {
+  addTechnique,
+  deleteTechnique,
+  updateTechnique,
+  type TechniqueInput,
+} from '../domain/techniques';
 import type { AppData, Rank, Result } from '../domain/types';
 import { loadData, saveData } from './storage';
 
@@ -38,6 +44,10 @@ export interface AppActions {
   addMatch(competitionId: string, input: MatchInput, today: string): string | null;
   updateMatch(competitionId: string, matchId: string, input: MatchInput): string | null;
   deleteMatch(competitionId: string, matchId: string): void;
+  addTechnique(input: TechniqueInput, today: string): string | null;
+  updateTechnique(id: string, input: TechniqueInput): string | null;
+  /** Also takes the technique off the sessions it was ticked on. */
+  deleteTechnique(id: string): void;
   /** Swaps in a whole data set, e.g. from a backup file. */
   replaceData(data: AppData): void;
 }
@@ -73,6 +83,9 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
     updateMatch: (competitionId, matchId, input) =>
       apply(updateMatch(data, competitionId, matchId, input)),
     deleteMatch: (competitionId, matchId) => commit(deleteMatch(data, competitionId, matchId)),
+    addTechnique: (input, today) => apply(addTechnique(data, input, today)),
+    updateTechnique: (id, input) => apply(updateTechnique(data, id, input)),
+    deleteTechnique: (id) => commit(deleteTechnique(data, id)),
     replaceData: commit,
   };
 

@@ -11,8 +11,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Log stripe and belt promotions, including back-dated ones. Out-of-order entries are rejected.
 - See a timeline of promotions and the time spent at each belt and stripe.
 - Log training sessions (date, duration, gi or no-gi, optional notes), and edit or delete them.
-- Filter your sessions by gi or no-gi and search their notes. Long lists show the most recent 30
-  sessions, with more on request.
+- Filter your sessions by gi or no-gi and search their notes and the techniques worked on. Long
+  lists show the most recent 30 sessions, with more on request.
 - See sessions and hours this week, since your last promotion, and all time.
 - Install it to your phone's home screen and use it with no signal.
 - Save a backup file and restore from one, to protect your history or move it to a new device.
@@ -27,6 +27,11 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
   medal can be added from the day.
 - Get a reminder on the Overview tab when your history has not been backed up for 30 days, or
   has never been backed up once it holds 10 records. It can be put off for 30 days.
+- Keep a technique journal: your own list of techniques, each with a position and how far along
+  you are (learning, drilling, or landing it in rolling). Tick the techniques you worked on when
+  you log a session, and see how often and how recently you have trained each one.
+- See what you are working on from the Overview tab, including techniques that have gone stale:
+  still being learned or drilled, and not trained for 30 days.
 
 ## Backups
 
@@ -35,8 +40,15 @@ Restoring shows what the file contains and what it will replace before anything 
 replaces the data on the device; it does not merge. Files that are not backups, come from a
 newer version of the app, or contain an out-of-order promotion history are refused.
 
-Backups are saved as format version 2, which added session notes, the weekly goal and
-competitions. Version 1 files still restore.
+Backups are saved as format version 3. Version 2 added session notes, the weekly goal and
+competitions; version 3 added techniques. Older files still restore.
+
+## Techniques
+
+The list is yours: the app ships no curriculum, so add the techniques your school teaches.
+Names must be unique. Deleting a technique takes it off the sessions it was ticked on and leaves
+the sessions in place. A technique that has never been ticked counts as untrained from the day
+it was added.
 
 ## Offline and updates
 
@@ -66,7 +78,7 @@ npm run dev
 ## Layout
 
 - `src/domain/` holds the rules (ranks, promotion ordering, timeline, mat-time totals, trends,
-  goals, competitions) as plain functions with their tests.
+  goals, competitions, techniques) as plain functions with their tests.
 - `src/state/` loads and saves the data.
 - `src/components/` holds the React UI.
 - `pwa/` holds the service worker and the build step that generates its file list.

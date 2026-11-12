@@ -17,7 +17,14 @@ describe('storage', () => {
       rank: { belt: 'blue', stripes: 2 },
       promotions: [{ id: 'p1', belt: 'blue', stripes: 0, date: '2024-01-01', academy: 'Home Gym' }],
       sessions: [
-        { id: 's1', date: '2024-02-01', durationMinutes: 90, type: 'nogi', notes: 'Leg locks' },
+        {
+          id: 's1',
+          date: '2024-02-01',
+          durationMinutes: 90,
+          type: 'nogi',
+          notes: 'Leg locks',
+          techniqueIds: ['t1'],
+        },
       ],
       weeklyGoal: 3,
       competitions: [
@@ -32,6 +39,9 @@ describe('storage', () => {
             { id: 'm2', result: 'loss', method: 'points', opponent: 'A. Rival' },
           ],
         },
+      ],
+      techniques: [
+        { id: 't1', name: 'Heel hook', position: 'legs', status: 'learning', addedOn: '2024-01-15' },
       ],
     };
     expect(saveData(data)).toBe(true);
@@ -131,6 +141,41 @@ describe('storage', () => {
     ]);
     // One competition with no name, one match with no method and one with a repeated id.
     expect(report.skipped).toBe(3);
+  });
+
+  it('tidies techniques and drops links to ones that are not in the journal', () => {
+    const report = parseDataWithReport({
+      techniques: [
+        { id: 't1', name: '  Armbar ', position: 'guard', status: 'drilling', addedOn: '2024-01-01', notes: ' ' },
+        { id: 't2', name: 'ARMBAR', position: 'mount', status: 'learning', addedOn: '2024-01-01' },
+        { id: 't3', name: 'Kimura', position: 'ceiling', status: 'learning', addedOn: '2024-01-01' },
+        { id: 't4', name: 'Kimura', position: 'guard', status: 'mastered', addedOn: '2024-01-01' },
+        { id: 't5', name: 'Kimura', position: 'guard', status: 'learning' },
+        { id: 't6', name: 'Kimura', position: 'guard', status: 'learning', addedOn: '2024-01-02' },
+      ],
+      sessions: [
+        {
+          id: 's1',
+          date: '2024-02-01',
+          durationMinutes: 60,
+          type: 'gi',
+          techniqueIds: ['t6', 't2', 't1', 't6', 7],
+        },
+        { id: 's2', date: '2024-02-02', durationMinutes: 60, type: 'gi', techniqueIds: 't1' },
+        { id: 's3', date: '2024-02-03', durationMinutes: 60, type: 'gi', techniqueIds: ['gone'] },
+      ],
+    });
+    expect(report.data.techniques).toEqual([
+      { id: 't1', name: 'Armbar', position: 'guard', status: 'drilling', addedOn: '2024-01-01' },
+      { id: 't6', name: 'Kimura', position: 'guard', status: 'learning', addedOn: '2024-01-02' },
+    ]);
+    expect(report.data.sessions).toEqual([
+      { id: 's1', date: '2024-02-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t6', 't1'] },
+      { id: 's2', date: '2024-02-02', durationMinutes: 60, type: 'gi' },
+      { id: 's3', date: '2024-02-03', durationMinutes: 60, type: 'gi' },
+    ]);
+    // A repeated name, an unknown position, an unknown stage and a missing date.
+    expect(report.skipped).toBe(4);
   });
 
   it('remembers the last backup date', () => {

@@ -4,8 +4,11 @@ import { findHistoryConflict } from './promotions';
 import type { AppData, Result } from './types';
 
 export const BACKUP_FORMAT = 'bjj-belt-tracker-backup';
-/** Version 2 added session notes, the weekly goal and competitions. Version 1 files still restore. */
-export const BACKUP_VERSION = 2;
+/**
+ * Version 2 added session notes, the weekly goal and competitions. Version 3 added techniques.
+ * Older files still restore.
+ */
+export const BACKUP_VERSION = 3;
 
 const NOT_A_BACKUP = "That file isn't a Belt Tracker backup.";
 
@@ -47,7 +50,11 @@ export function backupReminder(
   snoozedOn: string | null,
   today: string,
 ): BackupReminder | null {
-  const records = data.promotions.length + data.sessions.length + data.competitions.length;
+  const records =
+    data.promotions.length +
+    data.sessions.length +
+    data.competitions.length +
+    data.techniques.length;
   if (records === 0) return null;
   if (snoozedOn !== null && daysBetween(snoozedOn, today) < BACKUP_REMINDER_DAYS) return null;
   if (lastBackup === null) {

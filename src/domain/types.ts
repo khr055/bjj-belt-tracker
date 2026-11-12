@@ -25,6 +25,36 @@ export interface Session {
   durationMinutes: number;
   type: SessionType;
   notes?: string;
+  /** The techniques worked on, by id. Left out when there are none. */
+  techniqueIds?: string[];
+}
+
+export const POSITIONS = [
+  'standing',
+  'guard',
+  'passing',
+  'half-guard',
+  'side-control',
+  'mount',
+  'back',
+  'turtle',
+  'legs',
+  'other',
+] as const;
+export type Position = (typeof POSITIONS)[number];
+
+/** How far along a technique is, from first seeing it to using it against resistance. */
+export const TECHNIQUE_STATUSES = ['learning', 'drilling', 'landing'] as const;
+export type TechniqueStatus = (typeof TECHNIQUE_STATUSES)[number];
+
+export interface Technique {
+  id: string;
+  name: string;
+  position: Position;
+  status: TechniqueStatus;
+  notes?: string;
+  /** The day it was added to the journal. */
+  addedOn: string;
 }
 
 export const MATCH_RESULTS = ['win', 'loss', 'draw'] as const;
@@ -73,12 +103,21 @@ export interface AppData {
   /** Sessions the practitioner aims to train each week, if they have set a goal. */
   weeklyGoal: number | null;
   competitions: Competition[];
+  /** The practitioner's own list of techniques, in the order they were added. */
+  techniques: Technique[];
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export function emptyData(): AppData {
-  return { rank: null, promotions: [], sessions: [], weeklyGoal: null, competitions: [] };
+  return {
+    rank: null,
+    promotions: [],
+    sessions: [],
+    weeklyGoal: null,
+    competitions: [],
+    techniques: [],
+  };
 }
 
 export function newId(): string {

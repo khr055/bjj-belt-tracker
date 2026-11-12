@@ -86,7 +86,8 @@ h2 {
 /* Tabs */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* Six sections sit in two rows of three on a phone, so every label fits at a readable size. */
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px;
   background: var(--surface);
@@ -103,10 +104,19 @@ h2 {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  /* Five labels have to fit across the narrowest phones. */
-  font-size: clamp(0.7rem, 3.4vw, 0.9rem);
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+@media (min-width: 34rem) {
+  .tabs {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .tabs__tab {
+    font-size: 0.8rem;
+  }
 }
 
 .tabs__tab[aria-current='page'] {
@@ -334,6 +344,19 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+/* A chip whose label is free text, which may be long. */
+.chip--wrap {
+  max-width: 100%;
+  border-radius: 20px;
+  overflow-wrap: anywhere;
+}
+
+.chip__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 .chip--number {
   justify-content: center;
   min-width: 44px;
@@ -487,6 +510,17 @@ input[type='file'] {
 .list__notes {
   font-size: 0.9rem;
   white-space: pre-wrap;
+}
+
+/* A headed list within a card */
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.group + .group {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 /* Filters above a list */

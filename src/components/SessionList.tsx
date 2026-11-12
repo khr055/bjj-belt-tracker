@@ -7,17 +7,19 @@ import {
   NO_FILTER,
   sessionDefaults,
   SESSION_TYPE_LABELS,
+  sessionTechniques,
   sortSessions,
   summarize,
   type SessionFilter,
   type SessionInput,
 } from '../domain/sessions';
-import { SESSION_TYPES, type Session } from '../domain/types';
+import { SESSION_TYPES, type Session, type Technique } from '../domain/types';
 import { ConfirmDelete } from './ConfirmDelete';
 import { SessionForm } from './SessionForm';
 
 interface Props {
   sessions: Session[];
+  techniques: Technique[];
   today: string;
   onUpdate(id: string, input: SessionInput): string | null;
   onDelete(id: string): void;
@@ -35,7 +37,7 @@ function count(amount: number, noun: string): string {
   return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
 }
 
-export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
+export function SessionList({ sessions, techniques, today, onUpdate, onDelete }: Props) {
   const searchId = useId();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilterState] = useState<SessionFilter>(NO_FILTER);
@@ -52,7 +54,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
   }
 
   const filtering = isFiltering(filter);
-  const shown = sortSessions(filterSessions(sessions, filter));
+  const shown = sortSessions(filterSessions(sessions, filter, techniques));
 
   return (
     <>
@@ -71,7 +73,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
           ))}
         </div>
         <div className="field">
-          <label htmlFor={searchId}>Search notes</label>
+          <label htmlFor={searchId}>Search notes and techniques</label>
           <input
             id={searchId}
             type="search"
@@ -105,6 +107,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
                 <SessionForm
                   initial={session}
                   defaults={sessionDefaults(sessions)}
+                  techniques={techniques}
                   today={today}
                   onSubmit={(input) => {
                     const problem = onUpdate(session.id, input);
@@ -116,6 +119,7 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
               </li>
             );
           }
+          const workedOn = sessionTechniques(session, techniques);
           return (
             <li key={session.id} className="list__item list__item--stacked">
               <div className="list__row">
@@ -125,6 +129,11 @@ export function SessionList({ sessions, today, onUpdate, onDelete }: Props) {
                 </div>
                 <span className="list__value">{session.durationMinutes} min</span>
               </div>
+              {workedOn.length > 0 && (
+                <p className="muted list__detail">
+                  Worked on: {workedOn.map((technique) => technique.name).join(', ')}
+                </p>
+              )}
               {session.notes && <p className="list__detail list__notes">{session.notes}</p>}
               <div className="actions actions--tight">
                 <button

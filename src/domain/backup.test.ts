@@ -19,7 +19,14 @@ const DATA: AppData = {
     { id: 'p2', belt: 'blue', stripes: 0, date: '2024-03-02', promotedBy: 'Coach', academy: 'Gym' },
   ],
   sessions: [
-    { id: 's1', date: '2026-11-01', durationMinutes: 90, type: 'nogi', notes: 'Guard retention' },
+    {
+      id: 's1',
+      date: '2026-11-01',
+      durationMinutes: 90,
+      type: 'nogi',
+      notes: 'Guard retention',
+      techniqueIds: ['t1'],
+    },
   ],
   weeklyGoal: 3,
   competitions: [
@@ -36,6 +43,17 @@ const DATA: AppData = {
         { id: 'm2', result: 'win', method: 'points' },
       ],
     },
+  ],
+  techniques: [
+    {
+      id: 't1',
+      name: 'Knee shield retention',
+      position: 'half-guard',
+      status: 'drilling',
+      notes: 'Frame first',
+      addedOn: '2026-10-20',
+    },
+    { id: 't2', name: 'Triangle', position: 'guard', status: 'landing', addedOn: '2026-09-01' },
   ],
 };
 
@@ -63,6 +81,11 @@ describe('backupReminder', () => {
   it('stays quiet when there is nothing to lose', () => {
     expect(backupReminder(emptyData(), null, null, TODAY)).toBeNull();
     expect(backupReminder({ ...emptyData(), weeklyGoal: 3 }, '2020-01-01', null, TODAY)).toBeNull();
+  });
+
+  it('counts techniques as history worth backing up', () => {
+    const data = { ...emptyData(), techniques: DATA.techniques };
+    expect(backupReminder(data, '2026-09-01', null, TODAY)).toEqual({ kind: 'overdue', days: 71 });
   });
 
   it('waits for ten records before suggesting a first backup', () => {
@@ -124,7 +147,20 @@ describe('backup files', () => {
   it('restores a version 1 backup, made before goals and competitions existed', () => {
     const old = { rank: DATA.rank, promotions: DATA.promotions, sessions: [] };
     const result = readBackup(file({ version: 1, data: old }), TODAY);
-    expect(result.ok && result.value.data).toEqual({ ...old, weeklyGoal: null, competitions: [] });
+    expect(result.ok && result.value.data).toEqual({
+      ...old,
+      weeklyGoal: null,
+      competitions: [],
+      techniques: [],
+    });
+  });
+
+  it('restores a version 2 backup, made before techniques existed', () => {
+    const { techniques: _techniques, ...old } = DATA;
+    const sessions = [{ id: 's1', date: '2026-11-01', durationMinutes: 90, type: 'nogi' }];
+    const result = readBackup(file({ version: 2, data: { ...old, sessions } }), TODAY);
+    expect(result.ok && result.value.data).toEqual({ ...old, sessions, techniques: [] });
+    expect(result.ok && result.value.skipped).toBe(0);
   });
 
   it('saves backups in the current version', () => {

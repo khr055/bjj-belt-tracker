@@ -8,6 +8,7 @@ import {
   type Result,
   type Session,
   type SessionType,
+  type Technique,
 } from './types';
 
 export type SessionInput = Omit<Session, 'id'>;
@@ -15,6 +16,7 @@ export type SessionInput = Omit<Session, 'id'>;
 export const MAX_SESSION_MINUTES = 600;
 export const DEFAULT_SESSION_MINUTES = 60;
 export const MAX_NOTES_LENGTH = 500;
+export const MAX_SESSION_TECHNIQUES = 20;
 
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = { gi: 'Gi', nogi: 'No-gi' };
 
@@ -32,16 +34,29 @@ export function validateSession(input: SessionInput, today: string): string | nu
   if ((input.notes ?? '').trim().length > MAX_NOTES_LENGTH) {
     return `Keep notes to ${MAX_NOTES_LENGTH} characters or fewer.`;
   }
+  if (new Set(input.techniqueIds ?? []).size > MAX_SESSION_TECHNIQUES) {
+    return `Choose up to ${MAX_SESSION_TECHNIQUES} techniques for a session.`;
+  }
   return null;
 }
 
-function pick(input: SessionInput): SessionInput {
+/** The ids that name a technique in the journal, each once, in the order given. */
+export function knownTechniqueIds(ids: unknown, techniques: Technique[]): string[] {
+  if (!Array.isArray(ids)) return [];
+  const known = new Set(techniques.map((technique) => technique.id));
+  return [...new Set(ids)].filter((id): id is string => typeof id === 'string' && known.has(id));
+}
+
+/** A technique deleted while the form was open is quietly left off the session. */
+function pick(input: SessionInput, techniques: Technique[]): SessionInput {
   const notes = input.notes?.trim();
+  const techniqueIds = knownTechniqueIds(input.techniqueIds, techniques);
   return {
     date: input.date,
     durationMinutes: input.durationMinutes,
     type: input.type,
     ...(notes ? { notes } : {}),
+    ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
   };
 }
 
@@ -50,7 +65,7 @@ export function addSession(data: AppData, input: SessionInput, today: string): R
   if (error) return { ok: false, error };
   return {
     ok: true,
-    value: { ...data, sessions: [...data.sessions, { id: newId(), ...pick(input) }] },
+    value: { ...data, sessions: [...data.sessions, { id: newId(), ...pick(input, data.techniques) }] },
   };
 }
 
@@ -69,7 +84,7 @@ export function updateSession(
     ok: true,
     value: {
       ...data,
-      sessions: data.sessions.map((s) => (s.id === id ? { id, ...pick(input) } : s)),
+      sessions: data.sessions.map((s) => (s.id === id ? { id, ...pick(input, data.techniques) } : s)),
     },
   };
 }
@@ -88,7 +103,7 @@ export function sortSessions(sessions: Session[]): Session[] {
 
 export interface SessionFilter {
   type: SessionType | 'all';
-  /** Words to look for in the notes. */
+  /** Words to look for in the notes and in the names of the techniques worked on. */
   text: string;
 }
 
@@ -98,13 +113,28 @@ export function isFiltering(filter: SessionFilter): boolean {
   return filter.type !== 'all' || filter.text.trim() !== '';
 }
 
-/** Keeps sessions of the chosen type whose notes contain every word searched for. */
-export function filterSessions(sessions: Session[], filter: SessionFilter): Session[] {
+/** The techniques a session worked on, in the order they were ticked. */
+export function sessionTechniques(session: Session, techniques: Technique[]): Technique[] {
+  const byId = new Map(techniques.map((technique) => [technique.id, technique]));
+  return (session.techniqueIds ?? []).flatMap((id) => byId.get(id) ?? []);
+}
+
+/**
+ * Keeps sessions of the chosen type where every word searched for appears in the notes or in
+ * the name of a technique worked on.
+ */
+export function filterSessions(
+  sessions: Session[],
+  filter: SessionFilter,
+  techniques: Technique[] = [],
+): Session[] {
   const words = filter.text.toLowerCase().split(/\s+/).filter(Boolean);
   return sessions.filter((session) => {
     if (filter.type !== 'all' && session.type !== filter.type) return false;
-    const notes = (session.notes ?? '').toLowerCase();
-    return words.every((word) => notes.includes(word));
+    if (words.length === 0) return true;
+    const names = sessionTechniques(session, techniques).map((technique) => technique.name);
+    const text = [session.notes ?? '', ...names].join('\n').toLowerCase();
+    return words.every((word) => text.includes(word));
   });
 }
 

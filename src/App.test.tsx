@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createBackupText, readBackup } from './domain/backup';
-import { addDays, formatShortDate, todayIso, weekStart } from './domain/dates';
-import { emptyData, type AppData, type Session } from './domain/types';
+import { addDays, formatDate, formatShortDate, todayIso, weekStart } from './domain/dates';
+import { emptyData, type AppData, type Session, type Technique } from './domain/types';
 import { downloadTextFile } from './state/files';
 import { BACKUP_SNOOZE_KEY, LAST_BACKUP_KEY, STORAGE_KEY } from './state/storage';
 
@@ -221,7 +221,7 @@ describe('Training log', () => {
     expect(within(list).getByText('Knee cut passing')).toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
 
-    await user.type(within(list).getByLabelText('Search notes'), 'leg');
+    await user.type(within(list).getByLabelText('Search notes and techniques'), 'leg');
     expect(within(list).queryByText('Knee cut passing')).not.toBeInTheDocument();
     expect(within(list).getByText('Leg locks')).toBeInTheDocument();
     expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 2 sessions · 1 hours');
@@ -445,6 +445,186 @@ describe('Competitions', () => {
   });
 });
 
+describe('Technique journal', () => {
+  const KNEE_CUT: Technique = {
+    id: 't1',
+    name: 'Knee cut pass',
+    position: 'passing',
+    status: 'drilling',
+    addedOn: '2024-01-01',
+  };
+  const TRIANGLE: Technique = {
+    id: 't2',
+    name: 'Triangle',
+    position: 'guard',
+    status: 'landing',
+    addedOn: '2024-01-01',
+  };
+
+  it('adds techniques, grouped by position, and filters them by stage', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Techniques' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    expect(screen.getByText(/No techniques yet/)).toBeInTheDocument();
+
+    // A position has to be chosen; the stage starts at learning.
+    await user.click(screen.getByRole('button', { name: 'Add technique' }));
+    let form = screen.getByRole('form', { name: 'Add technique' });
+    await user.type(within(form).getByLabelText('Technique name'), 'Knee cut pass');
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a position.');
+    await user.click(within(form).getByRole('radio', { name: 'Guard passing' }));
+    expect(within(form).getByRole('radio', { name: 'Learning' })).toBeChecked();
+    await user.type(within(form).getByLabelText(/Notes/), 'Head on the far side');
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+
+    await user.click(screen.getByRole('button', { name: 'Add technique' }));
+    form = screen.getByRole('form', { name: 'Add technique' });
+    await user.type(within(form).getByLabelText('Technique name'), 'knee cut pass');
+    await user.click(within(form).getByRole('radio', { name: 'Guard' }));
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'You already have a technique called Knee cut pass.',
+    );
+    await user.clear(within(form).getByLabelText('Technique name'));
+    await user.type(within(form).getByLabelText('Technique name'), 'Triangle');
+    await user.click(within(form).getByRole('radio', { name: 'Landing in rolling' }));
+    await user.click(within(form).getByRole('button', { name: 'Save technique' }));
+
+    expect(stored().techniques).toMatchObject([
+      {
+        name: 'Knee cut pass',
+        position: 'passing',
+        status: 'learning',
+        notes: 'Head on the far side',
+        addedOn: todayIso(),
+      },
+      { name: 'Triangle', position: 'guard', status: 'landing', addedOn: todayIso() },
+    ]);
+
+    const passing = screen.getByRole('list', { name: 'Guard passing' });
+    expect(passing).toHaveTextContent('Knee cut pass');
+    expect(passing).toHaveTextContent('Learning · Not ticked on a session yet');
+    expect(passing).toHaveTextContent('Head on the far side');
+    expect(screen.getByRole('list', { name: 'Guard' })).toHaveTextContent('Triangle');
+
+    const stages = screen.getByRole('group', { name: 'Show techniques' });
+    expect(within(stages).getByRole('button', { name: 'All 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(within(stages).getByRole('button', { name: 'Landing in rolling 1' }));
+    expect(screen.queryByRole('list', { name: 'Guard passing' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Guard' })).toHaveTextContent('Triangle');
+    await user.click(within(stages).getByRole('button', { name: 'Drilling 0' }));
+    expect(screen.getByText('No techniques at this stage.')).toBeInTheDocument();
+  });
+
+  it('ticks techniques on a session and shows when each was last trained', async () => {
+    seed({ techniques: [KNEE_CUT, TRIANGLE] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    // The technique being worked on is offered first; the rest are a tap away.
+    const form = screen.getByRole('form', { name: 'Log session' });
+    const picker = within(form).getByRole('group', { name: /Techniques worked on/ });
+    expect(within(picker).queryByRole('checkbox', { name: 'Triangle' })).not.toBeInTheDocument();
+    await user.click(within(picker).getByRole('checkbox', { name: 'Knee cut pass' }));
+    await user.click(within(picker).getByRole('button', { name: 'Show 1 more' }));
+    await user.click(within(picker).getByRole('checkbox', { name: 'Triangle' }));
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+
+    expect(stored().sessions[0].techniqueIds).toEqual(['t1', 't2']);
+    // The ticks belong to the class just logged, so the next one starts clear.
+    expect(within(picker).getByRole('checkbox', { name: 'Knee cut pass' })).not.toBeChecked();
+
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    expect(list).toHaveTextContent('Worked on: Knee cut pass, Triangle');
+    await user.type(within(list).getByLabelText('Search notes and techniques'), 'triangle');
+    expect(within(list).getByRole('status')).toHaveTextContent('Found 1 of 1 session');
+    await user.clear(within(list).getByLabelText('Search notes and techniques'));
+    await user.type(within(list).getByLabelText('Search notes and techniques'), 'kimura');
+    expect(within(list).getByText('No sessions match.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    expect(screen.getByRole('list', { name: 'Guard passing' })).toHaveTextContent(
+      `Drilling · Trained in 1 session · last on ${formatDate(todayIso())}`,
+    );
+  });
+
+  it('unticks a technique when a session is edited', async () => {
+    seed({
+      techniques: [KNEE_CUT, TRIANGLE],
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t2', 't1'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const form = screen.getByRole('form', { name: 'Edit session' });
+    // A ticked technique is shown even though it is no longer being worked on.
+    expect(within(form).getByRole('checkbox', { name: 'Triangle' })).toBeChecked();
+    await user.click(within(form).getByRole('checkbox', { name: 'Triangle' }));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0].techniqueIds).toEqual(['t1']);
+  });
+
+  it('edits a technique, and deleting one takes it off its sessions', async () => {
+    seed({
+      techniques: [KNEE_CUT, TRIANGLE],
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit Knee cut pass' }));
+    const form = screen.getByRole('form', { name: 'Edit technique' });
+    expect(within(form).getByRole('radio', { name: 'Guard passing' })).toBeChecked();
+    await user.click(within(form).getByRole('radio', { name: 'Landing in rolling' }));
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().techniques[0]).toEqual({ ...KNEE_CUT, status: 'landing' });
+
+    await user.click(screen.getByRole('button', { name: 'Delete Knee cut pass' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm delete Knee cut pass' }));
+    expect(stored().techniques).toEqual([TRIANGLE]);
+    expect(stored().sessions).toEqual([
+      { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi' },
+    ]);
+  });
+
+  it('shows what is being worked on and what has gone stale on the overview', () => {
+    const today = todayIso();
+    seed({
+      techniques: [
+        { ...KNEE_CUT, addedOn: addDays(today, -90) },
+        { ...TRIANGLE, addedOn: addDays(today, -90) },
+        { id: 't3', name: 'Armbar', position: 'guard', status: 'learning', addedOn: addDays(today, -90) },
+      ],
+      sessions: [
+        { id: 's1', date: addDays(today, -2), durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+        { id: 's2', date: addDays(today, -40), durationMinutes: 60, type: 'gi', techniqueIds: ['t3', 't2'] },
+      ],
+    });
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Techniques' });
+    const workingOn = within(card).getByRole('group', { name: 'Working on' });
+    expect(workingOn).toHaveTextContent('2 techniques');
+    expect(workingOn).toHaveTextContent('1 learning · 1 drilling · 1 landing in rolling');
+    expect(card).toHaveTextContent(`RecentKnee cut pass (${formatShortDate(addDays(today, -2))})`);
+    expect(card).toHaveTextContent('StaleArmbar (40 days)');
+    expect(card).toHaveTextContent('Stale means not trained for 30 days or more.');
+  });
+});
+
 describe('Long session lists', () => {
   it('shows the most recent 30 sessions and more on request', async () => {
     const sessions: Session[] = Array.from({ length: 35 }, (_, index) => ({
@@ -582,6 +762,9 @@ describe('Backup and restore', () => {
         matches: [{ id: 'm1', result: 'win', method: 'points' }],
       },
     ],
+    techniques: [
+      { id: 't1', name: 'Armbar', position: 'guard', status: 'drilling', addedOn: '2025-02-10' },
+    ],
   };
 
   function backupFile(data: AppData, name = 'backup.json'): File {
@@ -625,15 +808,15 @@ describe('Backup and restore', () => {
 
     await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
     const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
-    expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session · 1 competition');
+    expect(confirm).toHaveTextContent('In the backup: Blue belt, 1 stripe · 2 promotions · 1 session · 1 competition · 1 technique');
     expect(confirm).toHaveTextContent(
-      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session · 0 competitions.',
+      'Restoring replaces everything on this device now: White belt, 2 stripes · 0 promotions · 1 session · 0 competitions · 0 techniques.',
     );
     expect(stored()).toEqual(existing);
 
     await user.click(within(confirm).getByRole('button', { name: 'Restore this backup' }));
     expect(stored()).toEqual(HISTORY);
-    expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions, 1 session and 1 competition.');
+    expect(screen.getByRole('status')).toHaveTextContent('Restored 2 promotions, 1 session, 1 competition and 1 technique.');
     // The data now matches a file saved today, so it counts as backed up today.
     expect(window.localStorage.getItem(LAST_BACKUP_KEY)).toBe(todayIso());
 

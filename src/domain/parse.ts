@@ -3,23 +3,34 @@ import { isIsoDate } from './dates';
 import { isValidGoal } from './goals';
 import { highestPromotion } from './promotions';
 import { isValidRank, rankValue } from './rank';
-import { MAX_NOTES_LENGTH, MAX_SESSION_MINUTES } from './sessions';
+import {
+  knownTechniqueIds,
+  MAX_NOTES_LENGTH,
+  MAX_SESSION_MINUTES,
+  MAX_SESSION_TECHNIQUES,
+} from './sessions';
+import { MAX_TECHNIQUE_NAME_LENGTH, MAX_TECHNIQUES } from './techniques';
 import {
   emptyData,
   MATCH_METHODS,
   MATCH_RESULTS,
   MEDALS,
+  POSITIONS,
   SESSION_TYPES,
+  TECHNIQUE_STATUSES,
   type AppData,
   type Competition,
   type Match,
   type MatchMethod,
   type MatchResult,
   type Medal,
+  type Position,
   type Promotion,
   type Rank,
   type Session,
   type SessionType,
+  type Technique,
+  type TechniqueStatus,
 } from './types';
 
 type Loose = Record<string, unknown>;
@@ -50,7 +61,24 @@ function toPromotion(value: unknown): Promotion | null {
   };
 }
 
-function toSession(value: unknown): Session | null {
+function toTechnique(value: unknown): Technique | null {
+  if (!isObject(value) || typeof value.id !== 'string' || !isIsoDate(value.addedOn)) return null;
+  const name = optionalText(value.name, MAX_TECHNIQUE_NAME_LENGTH);
+  if (!name || !POSITIONS.includes(value.position as Position)) return null;
+  if (!TECHNIQUE_STATUSES.includes(value.status as TechniqueStatus)) return null;
+  const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
+  return {
+    id: value.id,
+    name,
+    position: value.position as Position,
+    status: value.status as TechniqueStatus,
+    ...(notes ? { notes } : {}),
+    addedOn: value.addedOn,
+  };
+}
+
+/** Links to techniques that are not in the journal are dropped; the session is kept. */
+function toSession(value: unknown, techniques: Technique[]): Session | null {
   if (!isObject(value) || typeof value.id !== 'string' || !isIsoDate(value.date)) return null;
   const minutes = value.durationMinutes;
   if (
@@ -63,12 +91,17 @@ function toSession(value: unknown): Session | null {
   }
   if (!SESSION_TYPES.includes(value.type as SessionType)) return null;
   const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
+  const techniqueIds = knownTechniqueIds(value.techniqueIds, techniques).slice(
+    0,
+    MAX_SESSION_TECHNIQUES,
+  );
   return {
     id: value.id,
     date: value.date,
     durationMinutes: minutes,
     type: value.type as SessionType,
     ...(notes ? { notes } : {}),
+    ...(techniqueIds.length > 0 ? { techniqueIds } : {}),
   };
 }
 
@@ -146,7 +179,21 @@ export interface ParseReport {
 export function parseDataWithReport(raw: unknown): ParseReport {
   if (!isObject(raw)) return { data: emptyData(), skipped: 0 };
   const promotions = compact(raw.promotions, toPromotion);
-  const sessions = compact(raw.sessions, toSession);
+
+  // A technique whose name repeats an earlier one is left out, as the app would refuse it.
+  const names = new Set<string>();
+  const parsedTechniques = compact(raw.techniques, (value) => {
+    const technique = toTechnique(value);
+    const key = technique?.name.toLowerCase();
+    if (!technique || key === undefined || names.has(key)) return null;
+    names.add(key);
+    return technique;
+  });
+  const techniques = parsedTechniques.kept.slice(0, MAX_TECHNIQUES);
+  const skippedTechniques =
+    parsedTechniques.skipped + (parsedTechniques.kept.length - techniques.length);
+
+  const sessions = compact(raw.sessions, (value) => toSession(value, techniques));
 
   let skippedMatches = 0;
   const competitions = compact(raw.competitions, (value) => {
@@ -171,8 +218,14 @@ export function parseDataWithReport(raw: unknown): ParseReport {
       sessions: sessions.kept,
       weeklyGoal: isValidGoal(raw.weeklyGoal) ? raw.weeklyGoal : null,
       competitions: competitions.kept,
+      techniques,
     },
-    skipped: promotions.skipped + sessions.skipped + competitions.skipped + skippedMatches,
+    skipped:
+      promotions.skipped +
+      sessions.skipped +
+      competitions.skipped +
+      skippedMatches +
+      skippedTechniques,
   };
 }
 

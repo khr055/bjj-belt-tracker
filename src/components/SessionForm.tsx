@@ -1,12 +1,15 @@
 import { useId, useState, type FormEvent } from 'react';
 import { MAX_NOTES_LENGTH, SESSION_TYPE_LABELS, type SessionInput } from '../domain/sessions';
-import { SESSION_TYPES, type Session, type SessionType } from '../domain/types';
+import { SESSION_TYPES, type Session, type SessionType, type Technique } from '../domain/types';
+import { TechniquePicker } from './TechniquePicker';
 
 interface Props {
   /** The session being edited; omit to log a new one. */
   initial?: Session;
   /** Duration and type pre-filled for a new session. */
   defaults: Pick<Session, 'durationMinutes' | 'type'>;
+  /** The journal, so the techniques worked on can be ticked. */
+  techniques: Technique[];
   today: string;
   onSubmit(input: SessionInput): string | null;
   onCancel?(): void;
@@ -14,24 +17,28 @@ interface Props {
 
 const DURATION_PRESETS = [60, 90, 120];
 
-export function SessionForm({ initial, defaults, today, onSubmit, onCancel }: Props) {
+export function SessionForm({ initial, defaults, techniques, today, onSubmit, onCancel }: Props) {
   const id = useId();
   const [date, setDate] = useState(initial?.date ?? today);
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? defaults.durationMinutes));
   const [type, setType] = useState<SessionType>(initial?.type ?? defaults.type);
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [techniqueIds, setTechniqueIds] = useState(initial?.techniqueIds ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const minutes = Number(duration);
-    const problem = onSubmit({ date, durationMinutes: minutes, type, notes });
+    const problem = onSubmit({ date, durationMinutes: minutes, type, notes, techniqueIds });
     setError(problem);
     // A new session keeps its date, duration and type so the next class can be logged straight
-    // away. The notes belong to the class just logged, so they are cleared.
+    // away. The notes and techniques belong to the class just logged, so they are cleared.
     setSaved(problem || initial ? null : `Logged ${minutes} min ${SESSION_TYPE_LABELS[type]} session.`);
-    if (!problem && !initial) setNotes('');
+    if (!problem && !initial) {
+      setNotes('');
+      setTechniqueIds([]);
+    }
   };
 
   return (
@@ -92,6 +99,7 @@ export function SessionForm({ initial, defaults, today, onSubmit, onCancel }: Pr
           ))}
         </div>
       </fieldset>
+      <TechniquePicker techniques={techniques} selected={techniqueIds} onChange={setTechniqueIds} />
       <div className="field">
         <label htmlFor={`${id}-notes`}>
           Notes <span className="muted">(optional)</span>

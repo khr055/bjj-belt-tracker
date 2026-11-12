@@ -32,6 +32,7 @@ function describe(data: AppData): string {
     count(data.promotions.length, 'promotion'),
     count(data.sessions.length, 'session'),
     count(data.competitions.length, 'competition'),
+    count(data.techniques.length, 'technique'),
   ].join(' · ');
 }
 
@@ -41,6 +42,7 @@ function isEmpty(data: AppData): boolean {
     data.promotions.length === 0 &&
     data.sessions.length === 0 &&
     data.competitions.length === 0 &&
+    data.techniques.length === 0 &&
     data.weeklyGoal === null
   );
 }
@@ -99,7 +101,7 @@ export function BackupView({ data, today, onRestore }: Props) {
     }
     setPending(null);
     setStatus(
-      `Restored ${count(restored.promotions.length, 'promotion')}, ${count(restored.sessions.length, 'session')} and ${count(restored.competitions.length, 'competition')}.`,
+      `Restored ${count(restored.promotions.length, 'promotion')}, ${count(restored.sessions.length, 'session')}, ${count(restored.competitions.length, 'competition')} and ${count(restored.techniques.length, 'technique')}.`,
     );
   };
 
