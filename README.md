@@ -247,9 +247,20 @@ Who can do what:
 
 - **Everyone** signs in and has their own training record: sessions, techniques, competitions,
   time off, promotions, rank and weekly goal. Nobody can read another student's record.
-- **A student** joins an academy with a code a coach gives them, and can leave.
-- **A coach** can read the records of the people in their academy and record their promotions,
-  which raises the student's rank. A coach cannot change anything else in a student's record.
+- **A student** joins an academy with a code a coach gives them, and can leave. Students check
+  themselves in by logging their own sessions, and can edit and delete them. Their techniques,
+  session notes, what they were caught with, competitions, matches and the reasons and notes
+  for time off are private to them.
+- **Only coaches and owners award rank.** A coach records the promotions of the people in their
+  academy, and can correct or delete one entered by mistake. A person's rank is always the
+  highest promotion they have, so it follows what the coach records and nobody can set it
+  directly. Students can read their own promotions but cannot add, change or delete them.
+  Coaches and owners record their own promotions, since the head coach has nobody above them.
+  Each promotion keeps who entered it.
+- **A coach** sees, for the people in their academy, names, rank, promotion history, attendance
+  (the date, length and kind of each session) and the dates of time off, and nothing else. The
+  dates of time off are there so that someone who is away is not taken for someone who has gone
+  quiet. A coach cannot change anything in a student's record except their promotions.
 - **An owner** is a coach who can also make members coaches, remove members, rename or close
   the academy, and replace its joining code. An academy always has at least one owner.
 - Academies cannot see each other. Someone who is not signed in can see nothing.

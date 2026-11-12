@@ -1,7 +1,12 @@
 -- Belt Tracker: the academy database.
 --
--- Everyone in an academy signs in. A student owns their own training record; a coach of their
--- academy can read it and can record their promotions; an owner also manages who is a coach.
+-- Everyone in an academy signs in. A student owns their own training record and checks
+-- themselves in by logging their own sessions. Only a coach or owner awards rank: they record
+-- the promotions of the people in their academy, and a person's current rank is worked out from
+-- those, so nobody can set their own. A coach sees names, ranks, promotion histories, attendance
+-- and the dates of time off, and nothing else: techniques, session notes, what someone was caught
+-- with, competitions and the reasons for time off stay private to the student. An owner is a
+-- coach who also manages who is a coach.
 -- Every table has row-level security, so these rules hold whatever the app asks for.
 --
 -- The shapes and limits mirror src/domain/types.ts and the validation beside it. The app still
@@ -17,7 +22,9 @@
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default '' check (char_length(display_name) <= 80),
-  -- Current rank. Stripes are stripes on a coloured belt (0 to 4), degrees on a black belt (0 to 6).
+  -- Current rank: the highest promotion the person has, or null when they have none. It is kept
+  -- by the trigger on promotions and nobody writes it directly, because only coaches award rank.
+  -- Stripes are stripes on a coloured belt (0 to 4), degrees on a black belt (0 to 6).
   belt text check (belt in ('white', 'blue', 'purple', 'brown', 'black')),
   stripes smallint,
   weekly_goal smallint check (weekly_goal between 1 and 7),
@@ -62,7 +69,7 @@ create table public.promotions (
   date date not null,
   promoted_by text check (char_length(promoted_by) <= 80),
   academy text check (char_length(academy) <= 80),
-  -- Who entered it, when that was a coach and not the person themselves.
+  -- The coach or owner who entered it. Null only once that person's account has gone.
   recorded_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now(),
   constraint stripes_fit_belt check (
@@ -207,7 +214,8 @@ language sql stable security definer set search_path = public as $$
   );
 $$;
 
--- A person's own record, or that of someone they coach.
+-- A person's own profile and promotions, or those of someone they coach. The rest of a record
+-- is private to its owner, so nothing else uses this.
 create function public.can_read(person uuid) returns boolean
 language sql stable set search_path = public as $$
   select person = auth.uid() or coaches(person);
@@ -217,12 +225,22 @@ $$;
 -- Things done on someone's behalf
 -- ---------------------------------------------------------------------------------------------
 
--- Everyone who signs up gets a profile.
+-- Everyone who signs up gets a profile. The app sends the name as `display_name`; signing in
+-- with Google sends `full_name` or `name` instead, so the first of the three that is not blank
+-- is used.
 create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   insert into profiles (id, display_name)
-  values (new.id, coalesce(left(new.raw_user_meta_data ->> 'display_name', 80), ''));
+  values (
+    new.id,
+    coalesce(
+      left(nullif(btrim(new.raw_user_meta_data ->> 'display_name'), ''), 80),
+      left(nullif(btrim(new.raw_user_meta_data ->> 'full_name'), ''), 80),
+      left(nullif(btrim(new.raw_user_meta_data ->> 'name'), ''), 80),
+      ''
+    )
+  );
   return new;
 end;
 $$;
@@ -231,40 +249,56 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- A logged promotion can raise the current rank but never lowers it, as in the app. This is what
--- lets a coach's entry move a student's rank without the coach being able to edit the profile.
-create function public.raise_rank() returns trigger
+-- The current rank is always the highest promotion a person has, so it follows every change to
+-- their promotions: a new one can raise it, and correcting or deleting a mistaken one lowers it
+-- again. This is what lets a coach's entry move a student's rank without anyone, the student
+-- included, being able to write the rank itself.
+create function public.follow_promotions() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
   belts constant text[] := array['white', 'blue', 'purple', 'brown', 'black'];
+  person uuid;
 begin
-  update profiles
-  set belt = new.belt, stripes = new.stripes
-  where id = new.user_id
-    and (
-      belt is null
-      or array_position(belts, new.belt) * 10 + new.stripes
-         > array_position(belts, belt) * 10 + stripes
-    );
-  return new;
+  -- A deleted row has only an old side and a new row only a new one.
+  for person in
+    select distinct changed.id
+    from (values (case when tg_op <> 'INSERT' then old.user_id end),
+                 (case when tg_op <> 'DELETE' then new.user_id end)) as changed (id)
+    where changed.id is not null
+  loop
+    -- Two coaches entering promotions for the same person at once must not each miss the
+    -- other's, so the second waits here until the first has finished.
+    perform 1 from profiles where id = person for update;
+    update profiles
+    set (belt, stripes) = (
+      select p.belt, p.stripes
+      from promotions p
+      where p.user_id = person
+      -- Belts in the order they are earned, not the order of their names.
+      order by array_position(belts, p.belt) desc, p.stripes desc
+      limit 1
+    )
+    where id = person;
+  end loop;
+  return null;
 end;
 $$;
 
-create trigger promotions_raise_rank
-  after insert or update of belt, stripes on public.promotions
-  for each row execute function public.raise_rank();
+create trigger promotions_set_rank
+  after insert or update or delete on public.promotions
+  for each row execute function public.follow_promotions();
 
--- A promotion cannot be moved to another person, and says who entered it for someone else.
+-- A new promotion always says which coach or owner entered it, whatever the request claims,
+-- and a promotion cannot be moved to another person. Later changes leave `recorded_by` alone
+-- here: the privileges below stop people changing it, and the database itself must still be
+-- able to clear it when the recorder's account is deleted.
 create function public.stamp_promotion() returns trigger
 language plpgsql set search_path = public as $$
 begin
-  if tg_op = 'UPDATE' and new.user_id <> old.user_id then
-    raise exception 'A promotion cannot be moved to another person.' using errcode = '42501';
-  end if;
   if tg_op = 'INSERT' then
-    new.recorded_by := case when auth.uid() = new.user_id then null else auth.uid() end;
-  else
-    new.recorded_by := old.recorded_by;
+    new.recorded_by := auth.uid();
+  elsif new.user_id <> old.user_id then
+    raise exception 'A promotion cannot be moved to another person.' using errcode = '42501';
   end if;
   return new;
 end;
@@ -356,6 +390,44 @@ begin
 end;
 $$;
 
+-- What a coach or owner may see of their members' training, and no more. The tables themselves
+-- are closed to them, because a session also holds notes and what the person was caught with,
+-- and time off holds its reason. These hand out only the columns a coach needs, only for people
+-- who are in the academy now, and refuse anyone who is not its coach or owner.
+
+-- Attendance: who trained when, for how long, and in what kind of session.
+create function public.academy_attendance(academy uuid)
+returns table (user_id uuid, date date, duration_minutes smallint, type text, kind text)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_staff_of(academy) then
+    raise exception 'Only a coach or owner can see an academy''s attendance.' using errcode = '42501';
+  end if;
+  return query
+    select s.user_id, s.date, s.duration_minutes, s.type, s.kind
+    from memberships m
+    join sessions s on s.user_id = m.user_id
+    where m.academy_id = academy;
+end;
+$$;
+
+-- The dates of time off, so that someone who is away is not taken for someone who has gone
+-- quiet. The end date is null while the time off is still going on.
+create function public.academy_time_off(academy uuid)
+returns table (user_id uuid, start_date date, end_date date)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_staff_of(academy) then
+    raise exception 'Only a coach or owner can see an academy''s time off.' using errcode = '42501';
+  end if;
+  return query
+    select t.user_id, t.start_date, t.end_date
+    from memberships m
+    join time_off t on t.user_id = m.user_id
+    where m.academy_id = academy;
+end;
+$$;
+
 -- An academy always has an owner.
 create function public.keep_an_owner() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -394,8 +466,10 @@ alter table public.competitions enable row level security;
 alter table public.matches enable row level security;
 alter table public.time_off enable row level security;
 
--- Profiles: yours, and those of the people you coach. Only you change yours. They are made by
--- the sign-up trigger and removed with the account, so there is no insert or delete policy.
+-- Profiles: yours, and those of the people you coach, which is where a coach reads names and
+-- ranks. Only you change yours, and only your name and goal (see the privileges below). They are
+-- made by the sign-up trigger and removed with the account, so there is no insert or delete
+-- policy.
 create policy profiles_read on public.profiles for select to authenticated
   using (can_read(id));
 create policy profiles_update_own on public.profiles for update to authenticated
@@ -423,48 +497,41 @@ create policy memberships_update on public.memberships for update to authenticat
 create policy memberships_delete on public.memberships for delete to authenticated
   using (user_id = auth.uid() or is_owner_of(academy_id));
 
--- Promotions: yours to read and write; a coach reads and writes those of the people they coach,
--- since in an academy it is the coach who awards them.
+-- Promotions: you read your own, and a coach or owner reads those of the people in their
+-- academy. Only a coach or owner writes them, because rank is awarded, not claimed: a student
+-- cannot add, change or delete even their own. `coaches` is true for a coach's own id, so staff
+-- record their own promotions; the head coach has nobody above them to do it.
 create policy promotions_read on public.promotions for select to authenticated
   using (can_read(user_id));
 create policy promotions_insert on public.promotions for insert to authenticated
-  with check (can_read(user_id));
+  with check (coaches(user_id));
 create policy promotions_update on public.promotions for update to authenticated
-  using (can_read(user_id)) with check (can_read(user_id));
+  using (coaches(user_id)) with check (coaches(user_id));
 create policy promotions_delete on public.promotions for delete to authenticated
-  using (can_read(user_id));
+  using (coaches(user_id));
 
--- Everything else in a record: yours to read and write, your coach's to read.
-create policy techniques_read on public.techniques for select to authenticated
-  using (can_read(user_id));
-create policy techniques_write on public.techniques for all to authenticated
+-- Everything else in a record is private: yours alone to read and to write. This is also what
+-- lets a student check themselves in, by logging their own sessions. A coach reads none of these
+-- tables; attendance and the dates of time off reach them through academy_attendance() and
+-- academy_time_off().
+create policy techniques_own on public.techniques for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-create policy sessions_read on public.sessions for select to authenticated
-  using (can_read(user_id));
-create policy sessions_write on public.sessions for all to authenticated
+create policy sessions_own on public.sessions for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-create policy competitions_read on public.competitions for select to authenticated
-  using (can_read(user_id));
-create policy competitions_write on public.competitions for all to authenticated
+create policy competitions_own on public.competitions for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-create policy time_off_read on public.time_off for select to authenticated
-  using (can_read(user_id));
-create policy time_off_write on public.time_off for all to authenticated
+create policy time_off_own on public.time_off for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Rows that hang off a session or a competition follow the row they hang off.
-create policy session_techniques_read on public.session_techniques for select to authenticated
-  using (exists (select 1 from sessions s where s.id = session_id and can_read(s.user_id)));
-create policy session_techniques_write on public.session_techniques for all to authenticated
+create policy session_techniques_own on public.session_techniques for all to authenticated
   using (exists (select 1 from sessions s where s.id = session_id and s.user_id = auth.uid()))
   with check (exists (select 1 from sessions s where s.id = session_id and s.user_id = auth.uid()));
 
-create policy matches_read on public.matches for select to authenticated
-  using (exists (select 1 from competitions c where c.id = competition_id and can_read(c.user_id)));
-create policy matches_write on public.matches for all to authenticated
+create policy matches_own on public.matches for all to authenticated
   using (exists (select 1 from competitions c where c.id = competition_id and c.user_id = auth.uid()))
   with check (exists (select 1 from competitions c where c.id = competition_id and c.user_id = auth.uid()));
 
@@ -490,12 +557,17 @@ grant select, insert, update, delete on
 grant execute on function
   public.is_staff_of(uuid), public.is_owner_of(uuid), public.is_member_of(uuid),
   public.coaches(uuid), public.can_read(uuid),
-  public.create_academy(text), public.join_academy(text), public.renew_invite(uuid)
+  public.create_academy(text), public.join_academy(text), public.renew_invite(uuid),
+  public.academy_attendance(uuid), public.academy_time_off(uuid)
   to authenticated;
 
 -- An owner changes only a member's role, never whose membership it is.
 revoke update on public.memberships from authenticated;
 grant update (role) on public.memberships to authenticated;
--- A person changes their own name, rank and goal, not their id.
+-- A coach corrects what a promotion says, not whose it is or who recorded it.
+revoke update on public.promotions from authenticated;
+grant update (belt, stripes, date, promoted_by, academy) on public.promotions to authenticated;
+-- A person changes their own name and goal. Not their id, and not their rank: that follows the
+-- promotions a coach records.
 revoke update on public.profiles from authenticated;
-grant update (display_name, belt, stripes, weekly_goal) on public.profiles to authenticated;
+grant update (display_name, weekly_goal) on public.profiles to authenticated;
