@@ -9,6 +9,7 @@ import { TimelineView } from './components/TimelineView';
 import { todayIso } from './domain/dates';
 import { sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
+import { TrendsCard } from './components/TrendsCard';
 import { useAppState } from './state/useAppState';
 
 const TABS = [
@@ -96,6 +97,7 @@ export default function App() {
                 onSubmit={(input) => actions.addSession(input, today)}
               />
             </section>
+            <TrendsCard sessions={data.sessions} today={today} />
             <section className="card" aria-labelledby="sessions-heading">
               <h2 id="sessions-heading">Sessions</h2>
               <SessionList

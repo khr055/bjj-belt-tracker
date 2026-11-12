@@ -17,6 +17,9 @@
   --belt-brown: #6b4423;
   --belt-black: #1b1b1b;
 
+  /* Chart marks. Each value is checked against its card surface for lightness and contrast. */
+  --chart-bar: #1f5fbf;
+
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.45;
@@ -35,6 +38,7 @@
     --danger: #f2877f;
     --notice-bg: #3a2f10;
     --notice-text: #f4dfa0;
+    --chart-bar: #4a88e2;
   }
 }
 
@@ -501,4 +505,177 @@ input[type='file'] {
   .field-row {
     grid-template-columns: 1fr;
   }
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Column chart */
+.chart {
+  display: grid;
+  gap: 8px;
+}
+
+.chart__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chart__body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+
+.chart__ticks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* Half a line taller at each end, so every tick label is centred on its gridline. */
+  height: calc(120px + 1em);
+  margin: -0.5em 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+.chart__plot {
+  position: relative;
+  display: flex;
+  height: 120px;
+}
+
+.chart__gridline {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+/* The whole slot is the hover and focus target, not just the bar. */
+.chart__slot {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  outline-offset: -2px;
+}
+
+.chart__slot:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.chart__bar {
+  width: min(24px, 60%);
+  border-radius: 4px 4px 0 0;
+  background: var(--chart-bar);
+}
+
+.chart__slot:hover .chart__bar,
+.chart__slot:focus .chart__bar {
+  filter: brightness(1.25);
+}
+
+.chart__value {
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chart__tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 1;
+  display: none;
+  gap: 2px;
+  width: max-content;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  color: var(--text);
+  font-size: 0.75rem;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.chart__tooltip span {
+  color: var(--muted);
+}
+
+/* Tooltips at the edges open inwards so they stay inside the card. */
+.chart__tooltip--start {
+  left: 0;
+  transform: none;
+}
+
+.chart__tooltip--end {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.chart__slot:hover .chart__tooltip,
+.chart__slot:focus .chart__tooltip {
+  display: grid;
+}
+
+.chart__labels {
+  display: flex;
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.chart__labels span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chart-table summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chart-table table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--border);
+  font-weight: 400;
+  text-align: right;
+}
+
+.chart-table thead th {
+  border-top: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.chart-table th:first-child {
+  text-align: left;
 }

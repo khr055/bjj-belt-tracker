@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createBackupText, readBackup } from './domain/backup';
+import { addDays, formatShortDate, todayIso, weekStart } from './domain/dates';
 import type { AppData } from './domain/types';
 import { downloadTextFile } from './state/files';
 import { STORAGE_KEY } from './state/storage';
@@ -141,6 +142,60 @@ describe('App', () => {
     );
     expect(screen.getByText('No sessions logged yet.')).toBeInTheDocument();
     expect(stored().sessions).toEqual([]);
+  });
+});
+
+describe('Training trends', () => {
+  it('shows the streak, weekly average and sessions per week', async () => {
+    const thisWeek = weekStart(todayIso());
+    seed({
+      rank: { belt: 'blue', stripes: 0 },
+      promotions: [],
+      sessions: [
+        { id: 's1', date: thisWeek, durationMinutes: 60, type: 'gi' },
+        { id: 's2', date: addDays(thisWeek, -7), durationMinutes: 90, type: 'gi' },
+        { id: 's3', date: addDays(thisWeek, -14), durationMinutes: 60, type: 'nogi' },
+        { id: 's4', date: addDays(thisWeek, -13), durationMinutes: 60, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const streak = screen.getByRole('group', { name: 'Current streak' });
+    expect(streak).toHaveTextContent('3 weeks');
+    expect(streak).toHaveTextContent('Including this week');
+
+    const average = screen.getByRole('group', { name: 'Weekly average' });
+    expect(average).toHaveTextContent('1.5 sessions');
+    expect(average).toHaveTextContent('Over the last 2 full weeks');
+
+    const chart = screen.getByRole('group', { name: 'Sessions per week, last 8 weeks' });
+    const bars = within(chart).getAllByRole('img');
+    expect(bars).toHaveLength(8);
+    expect(bars[7]).toHaveAccessibleName(
+      `This week (from ${formatShortDate(thisWeek)}): 1 session, 1 hours`,
+    );
+    expect(bars[5]).toHaveAccessibleName(
+      `Week of ${formatShortDate(addDays(thisWeek, -14))}: 2 sessions, 2 hours`,
+    );
+    expect(bars[0]).toHaveAccessibleName(
+      `Week of ${formatShortDate(addDays(thisWeek, -49))}: 0 sessions, 0 hours`,
+    );
+
+    // The same figures are available as a table.
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    expect(rows).toHaveLength(9);
+    expect(rows[8]).toHaveTextContent(`${formatShortDate(thisWeek)} (this week)`);
+  });
+
+  it('invites logging when there are no sessions yet', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    expect(screen.getByRole('region', { name: 'Training trends' })).toHaveTextContent(
+      'Log a few sessions to see your weekly trend and streak.',
+    );
   });
 });
 

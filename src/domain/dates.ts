@@ -100,3 +100,27 @@ export function formatDate(value: string): string {
   if (!parts) return value;
   return `${parts.day} ${MONTHS[parts.month - 1]} ${parts.year}`;
 }
+
+/** Display form without the year, such as "12 Mar". */
+export function formatShortDate(value: string): string {
+  const parts = parseIsoDate(value);
+  if (!parts) return value;
+  return `${parts.day} ${MONTHS[parts.month - 1]}`;
+}
+
+export function addDays(value: string, days: number): string {
+  const start = parseIsoDate(value);
+  if (!start) return value;
+  const date = new Date(toUtc(start) + days * MS_PER_DAY);
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
+/** The Monday of the week the date falls in. */
+export function weekStart(value: string): string {
+  const parts = parseIsoDate(value);
+  if (!parts) return value;
+  const daysSinceMonday = (new Date(toUtc(parts)).getUTCDay() + 6) % 7;
+  return addDays(value, -daysSinceMonday);
+}

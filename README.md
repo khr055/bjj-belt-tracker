@@ -16,6 +16,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Save a backup file and restore from one, to protect your history or move it to a new device.
 - See your time in grade against the IBJJF minimum for your belt (2 years at blue, 18 months at
   purple, 1 year at brown) and the date you reach it.
+- See training trends: sessions per week for the last 8 weeks, your weekly average and your
+  streak of weeks with at least one session.
 
 ## Backups
 
