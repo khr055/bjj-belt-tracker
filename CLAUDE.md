@@ -52,6 +52,15 @@ describes every feature and the rules behind it, and is kept current with the co
   jargon beyond the sport's own terms.
 - **README:** a user-visible change updates the feature list and the section for that area.
 
+## Database
+
+- The schema and its access rules are in `supabase/migrations/`, mirroring `src/domain/types.ts`.
+  A change to a stored field changes both, and the limits in the two must agree.
+- Every table has row-level security. A new table needs policies, explicit grants and a case in
+  `supabase/tests/access.test.sql`, including what must be refused. Run `npm run test:db`.
+- Never put a secret (a database password or a service-role key) in the repo or in a `VITE_`
+  variable: those are built into the app that everyone downloads.
+
 ## Working with several agents
 
 - One agent writes; a different agent, given the diff and not the author's reasoning, reviews

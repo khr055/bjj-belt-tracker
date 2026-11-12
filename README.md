@@ -205,6 +205,28 @@ files in `public/ranks/`, written by `npm run icons`. Only the small tab icons a
 offline use up front; the home-screen icons and manifest for your rank are stored the first
 time they are fetched.
 
+## Database (in progress)
+
+The app is moving from storing everything in the browser to a shared database for a whole
+academy, on Supabase. The database design is in `supabase/migrations/`; the app does not use it
+yet, and still stores its data in the browser.
+
+Who can do what:
+
+- **Everyone** signs in and has their own training record: sessions, techniques, competitions,
+  time off, promotions, rank and weekly goal. Nobody can read another student's record.
+- **A student** joins an academy with a code a coach gives them, and can leave.
+- **A coach** can read the records of the people in their academy and record their promotions,
+  which raises the student's rank. A coach cannot change anything else in a student's record.
+- **An owner** is a coach who can also make members coaches, remove members, rename or close
+  the academy, and replace its joining code. An academy always has at least one owner.
+- Academies cannot see each other. Someone who is not signed in can see nothing.
+
+These rules are enforced by the database itself (row-level security), not only by the app.
+`npm run test:db` loads the design into a throwaway database on a local Postgres and checks
+each rule, including that the things that should be refused are refused. It needs `psql` and a
+server it can reach as a superuser, set with the usual `PGHOST` and `PGUSER` variables.
+
 ## Development
 
 Requires Node 20 or later.
@@ -222,6 +244,7 @@ npm run dev
 | `npm run build`     | Type-check, test and build into `dist/` |
 | `npm run preview`   | Serve the built app from `dist/`      |
 | `npm run icons`     | Regenerate the app icons in `public/` |
+| `npm run test:db`   | Check the database's access rules against a local Postgres |
 
 ## Layout
 
