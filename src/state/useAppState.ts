@@ -13,6 +13,7 @@ import { setWeeklyGoal } from '../domain/goals';
 import {
   addPromotion,
   deletePromotion,
+  revokePromotion,
   setRank,
   updatePromotion,
   type PromotionInput,
@@ -35,6 +36,8 @@ export interface AppActions {
   addPromotion(input: PromotionInput, today: string): string | null;
   updatePromotion(id: string, input: PromotionInput, today: string): string | null;
   deletePromotion(id: string): void;
+  /** As a coach does it: the rank falls to the highest promotion left. */
+  revokePromotion(id: string): void;
   addSession(input: SessionInput, today: string): string | null;
   updateSession(id: string, input: SessionInput, today: string): string | null;
   deleteSession(id: string): void;
@@ -78,6 +81,7 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
     addPromotion: (input, today) => apply(addPromotion(data, input, today)),
     updatePromotion: (id, input, today) => apply(updatePromotion(data, id, input, today)),
     deletePromotion: (id) => commit(deletePromotion(data, id)),
+    revokePromotion: (id) => commit(revokePromotion(data, id)),
     addSession: (input, today) => apply(addSession(data, input, today)),
     updateSession: (id, input, today) => apply(updateSession(data, id, input, today)),
     deleteSession: (id) => commit(deleteSession(data, id)),

@@ -2041,6 +2041,210 @@ describe('Backup and restore', () => {
   });
 });
 
+describe('Checking in', () => {
+  it('records today\'s class in one tap, like the last session', async () => {
+    seed({ sessions: [{ id: 'old', date: '2024-05-01', durationMinutes: 90, type: 'nogi', kind: 'open-mat' }] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Check in' });
+    expect(card).toHaveTextContent('One tap records that you were here.');
+    expect(card).toHaveTextContent('Records a 90 min No-gi class today');
+    await user.click(within(card).getByRole('button', { name: 'Check in to class' }));
+
+    // As long as the last session and in the same gi or no-gi, but a class whatever that was.
+    expect(stored().sessions[1]).toEqual({
+      id: stored().sessions[1].id,
+      date: todayIso(),
+      durationMinutes: 90,
+      type: 'nogi',
+      kind: 'class',
+    });
+    expect(card).toHaveTextContent('Checked in today. 1 session, 1.5 hours.');
+    expect(screen.getByRole('group', { name: 'This week' })).toHaveTextContent('1 session');
+
+    // A second class the same day is one more tap.
+    await user.click(within(card).getByRole('button', { name: 'Check in to another class' }));
+    expect(card).toHaveTextContent('Checked in today. 2 sessions, 3 hours.');
+    expect(stored().sessions).toHaveLength(3);
+  });
+});
+
+describe('Coach view', () => {
+  async function asCoach() {
+    const user = userEvent.setup();
+    render(<App />);
+    const views = screen.getByRole('group', { name: 'View as' });
+    expect(within(views).getByRole('button', { name: 'Student' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(within(views).getByRole('button', { name: 'Coach' }));
+    return user;
+  }
+
+  it('switches between the student\'s own record and the academy', async () => {
+    const user = await asCoach();
+    expect(screen.getByRole('heading', { name: 'Riverside Jiu-Jitsu' })).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Preview with a sample academy.');
+    // The student's sections are not part of the coach's view.
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Student' }));
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Riverside Jiu-Jitsu' })).not.toBeInTheDocument();
+  });
+
+  it('shows the academy at a glance: this week, minimum time met, gone quiet and new joiners', async () => {
+    await asCoach();
+    expect(screen.getByRole('group', { name: 'People training this week' })).toHaveTextContent('of 15');
+
+    const met = screen.getByRole('region', { name: 'Minimum time met' });
+    expect(within(met).getByRole('list')).toHaveTextContent('Alex Romero');
+    expect(met).toHaveTextContent('Promotion is still your decision.');
+
+    const quiet = screen.getByRole('region', { name: 'Gone quiet' });
+    const rows = within(quiet).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Emeka Obi');
+    expect(rows[0]).toHaveTextContent('34 days');
+    expect(rows[1]).toHaveTextContent('Hana Sato');
+    // Farah has not trained for longer, but is away.
+    expect(quiet).not.toHaveTextContent('Farah Haddad');
+
+    const joined = screen.getByRole('region', { name: 'Joined recently' });
+    // With nothing recorded yet, you count as having joined today, ahead of last week's joiner.
+    const [you, lena] = within(joined).getAllByRole('listitem');
+    expect(you).toHaveTextContent('You');
+    expect(lena).toHaveTextContent('Lena Fischer');
+    expect(lena).toHaveTextContent('No rank yet');
+  });
+
+  it('finds students by name and belt', async () => {
+    const user = await asCoach();
+    await user.click(screen.getByRole('button', { name: 'Students' }));
+    const card = screen.getByRole('region', { name: 'Students' });
+    expect(within(card).getByRole('status')).toHaveTextContent('15 members');
+
+    await user.type(within(card).getByLabelText('Search by name'), 'chen');
+    expect(within(card).getByRole('status')).toHaveTextContent('1 of 15 members');
+    const [row] = within(within(card).getByRole('list', { name: 'Students' })).getAllByRole('listitem');
+    expect(row).toHaveTextContent('Chen Wei');
+    expect(row).toHaveTextContent('Purple belt, 1 stripe');
+    expect(row).toHaveTextContent('in 30 days');
+
+    await user.clear(within(card).getByLabelText('Search by name'));
+    await user.click(within(card).getByRole('button', { name: /^Brown/ }));
+    expect(within(card).getByRole('status')).toHaveTextContent('1 of 15 members');
+    expect(within(card).getByRole('list', { name: 'Students' })).toHaveTextContent('Priya Nair');
+
+    await user.click(within(card).getByRole('button', { name: /^All/ }));
+    await user.selectOptions(within(card).getByLabelText('Sort by'), 'Rank');
+    expect(
+      within(within(card).getByRole('list', { name: 'Students' })).getAllByRole('listitem')[0],
+    ).toHaveTextContent('Marco Silva');
+  });
+
+  it('opens a student, shows rank and attendance only, and records a promotion', async () => {
+    const user = await asCoach();
+    await user.click(screen.getByRole('button', { name: 'Students' }));
+    await user.click(screen.getByRole('button', { name: 'Open Lena Fischer' }));
+
+    expect(screen.getByRole('heading', { name: 'Lena Fischer' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Lena Fischer' })).toHaveTextContent('No rank yet');
+    const attendance = screen.getByRole('region', { name: 'Attendance' });
+    expect(attendance).toHaveTextContent('Last 30 days');
+    expect(within(attendance).getAllByRole('img')).toHaveLength(8);
+    expect(attendance).toHaveTextContent('Their notes, techniques and competitions are theirs alone');
+    // The same card a student sees, worded for the coach reading it.
+    await user.click(screen.getByRole('button', { name: '‹ Back to students' }));
+    await user.click(screen.getByRole('button', { name: 'Open Alex Romero' }));
+    const grade = screen.getByRole('region', { name: 'Time in grade' });
+    expect(grade).toHaveTextContent("Minimum met. They've spent");
+    expect(grade).toHaveTextContent('Promotion is your decision.');
+    await user.click(screen.getByRole('button', { name: '‹ Back to students' }));
+    await user.click(screen.getByRole('button', { name: 'Open Lena Fischer' }));
+
+    // A new member has no rank until a coach gives them one; white belt is suggested.
+    await user.click(screen.getByRole('button', { name: 'Record a promotion' }));
+    const form = screen.getByRole('form', { name: 'Log promotion' });
+    expect(within(form).getByRole('radio', { name: 'White' })).toBeChecked();
+    await user.click(within(form).getByRole('button', { name: 'Save promotion' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Recorded White belt for Lena Fischer.');
+    expect(screen.getByRole('region', { name: 'Promotions' })).toHaveTextContent('White belt');
+
+    // The next rank up is suggested, and a rank cannot be given twice.
+    await user.click(screen.getByRole('button', { name: 'Record a promotion' }));
+    const again = screen.getByRole('form', { name: 'Log promotion' });
+    expect(within(again).getByRole('radio', { name: '1 stripe' })).toBeChecked();
+    await user.click(within(again).getByRole('radio', { name: '0 stripes' }));
+    await user.click(within(again).getByRole('button', { name: 'Save promotion' }));
+    expect(within(again).getByRole('alert')).toHaveTextContent("You've already logged White belt");
+
+    await user.click(screen.getByRole('button', { name: '‹ Back to students' }));
+    expect(screen.getByRole('region', { name: 'Students' })).toBeInTheDocument();
+  });
+
+  it('lets a coach promote you, and take it back, with your own record following', async () => {
+    seed({
+      rank: { belt: 'white', stripes: 3 },
+      promotions: [{ id: 'p1', belt: 'white', stripes: 3, date: '2025-06-01' }],
+      sessions: [{ id: 's1', date: '2025-07-01', durationMinutes: 60, type: 'gi', notes: 'Private note' }],
+    });
+    const user = await asCoach();
+    await user.click(screen.getByRole('button', { name: 'Students' }));
+    await user.click(screen.getByRole('button', { name: 'Open You' }));
+    // Your own notes are not part of what a coach sees.
+    expect(screen.queryByText('Private note')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'You' })).toHaveTextContent('White belt, 3 stripes');
+
+    await user.click(screen.getByRole('button', { name: 'Record a promotion' }));
+    const form = screen.getByRole('form', { name: 'Log promotion' });
+    expect(within(form).getByRole('radio', { name: '4 stripes' })).toBeChecked();
+    await user.click(within(form).getByRole('button', { name: 'Save promotion' }));
+    expect(stored().rank).toEqual({ belt: 'white', stripes: 4 });
+    expect(stored().promotions).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Student' }));
+    expect(screen.getByRole('heading', { name: 'White belt, 4 stripes' })).toBeInTheDocument();
+
+    // Taken back by the coach, the rank falls to the one before.
+    await user.click(screen.getByRole('button', { name: 'Coach' }));
+    await user.click(screen.getByRole('button', { name: 'Students' }));
+    await user.click(screen.getByRole('button', { name: 'Open You' }));
+    await user.click(screen.getByRole('button', { name: 'Delete White belt, 4 stripes for You' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm delete White belt, 4 stripes for You' }),
+    );
+    expect(stored().rank).toEqual({ belt: 'white', stripes: 3 });
+    expect(stored().promotions.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('shows the joining code and manages roles, always keeping an owner', async () => {
+    const user = await asCoach();
+    await user.click(screen.getByRole('button', { name: 'Manage' }));
+    const code = screen.getByLabelText('Joining code');
+    expect(code).toHaveTextContent('riverside-7q4k');
+    await user.click(screen.getByRole('button', { name: 'Replace code' }));
+    expect(code).not.toHaveTextContent('riverside-7q4k');
+
+    const members = screen.getByRole('region', { name: 'Members and roles' });
+    await user.selectOptions(within(members).getByLabelText('Role for Alex Romero'), 'Coach');
+    expect(within(members).getByLabelText('Role for Alex Romero')).toHaveValue('coach');
+
+    // The only owner cannot step down or be removed.
+    await user.selectOptions(within(members).getByLabelText('Role for Marco Silva'), 'Student');
+    expect(within(members).getByRole('alert')).toHaveTextContent('An academy needs at least one owner');
+    expect(within(members).getByLabelText('Role for Marco Silva')).toHaveValue('owner');
+
+    await user.click(within(members).getByRole('button', { name: 'Delete Hana Sato from the academy' }));
+    await user.click(
+      within(members).getByRole('button', { name: 'Confirm delete Hana Sato from the academy' }),
+    );
+    expect(within(members).queryByText('Hana Sato')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Students' }));
+    expect(within(screen.getByRole('region', { name: 'Students' })).getByRole('status')).toHaveTextContent(
+      '14 members',
+    );
+  });
+});
+
 describe('Training calendar', () => {
   // Built from the same string helpers the app uses, so the tests hold on any day they run.
   const MONTH_NAMES = [

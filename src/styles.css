@@ -1051,3 +1051,63 @@ input[type='file'] {
   padding: 0;
   list-style: none;
 }
+
+/* Academy (coach) screens */
+
+/* Stands in for a belt in a list when a coach has not yet given the person a rank. */
+.belt--none {
+  background: transparent;
+  border-style: dashed;
+}
+
+.join-code {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* A choice that sits at the end of a row, as wide as what it holds. */
+.select--compact {
+  flex: none;
+  width: auto;
+  max-width: 45%;
+}
+
+/* For a label a sighted reader gets from what is beside it. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The switch between the student's and the coach's view, beside the app's name. */
+.app__header--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.view-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.view-switch .chip {
+  min-height: 36px;
+}

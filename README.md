@@ -7,6 +7,10 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 
 ## Features
 
+- Switch between the Student view (your own record, everything below) and a preview of the Coach
+  view, which shows a sample academy: who has met their minimum time, who has gone quiet, each
+  student's rank and attendance, and recording promotions.
+- Check in to today's class in one tap from the Overview tab.
 - Set and edit your current rank (white to black belt, 0 to 4 stripes, and 0 to 6 degrees on a
   black belt).
 - Log stripe and belt promotions, including back-dated ones. Out-of-order entries are rejected.
@@ -204,6 +208,34 @@ Until a rank is set, the icon is a blue belt with two stripes. The icons for eve
 files in `public/ranks/`, written by `npm run icons`. Only the small tab icons are stored for
 offline use up front; the home-screen icons and manifest for your rank are stored the first
 time they are fetched.
+
+## Coach view (preview)
+
+The switch at the top changes between the Student view and the Coach view. Until people can
+sign in there are no real members, so the Coach view runs on a made-up academy. The one real
+member in it is "You": your own record, as your coach would see it. Recording a promotion for
+"You" as coach changes your rank in the Student view; deleting it puts the rank back to the
+highest promotion left. Changes to the made-up people last until the page is reloaded.
+
+A coach sees, for each person: their name, rank and promotion history, their attendance (when
+they trained, for how long, gi or no-gi, and what kind of session), and the dates they are away.
+A coach does not see notes, techniques, competitions, what someone was caught with, or the
+reason for time off.
+
+- **Overview:** sessions and people on the mat this week, then four lists: who has met the
+  minimum time at their belt, who has the most mat time since a promotion, who has gone quiet
+  (no session for 21 days, not counting days away, and leaving out anyone away today), and who
+  joined in the last 30 days.
+- **Students:** everyone, searched by name, narrowed to a belt, and sorted by name, rank, last
+  trained or time at rank.
+- **A student:** rank, time in grade, attendance over the last 30 days and since their last
+  promotion, sessions per week, and their promotions. Recording a promotion follows the same
+  rules as the timeline: a rank is reached once and the history only climbs.
+- **Manage:** the joining code to hand out, and each member's role. An academy always keeps at
+  least one owner.
+
+In the Student view you can still set your own rank and log your own promotions. Once the app is
+on the database, only coaches and owners will be able to.
 
 ## Database (in progress)
 

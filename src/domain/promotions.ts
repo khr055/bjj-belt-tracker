@@ -111,6 +111,16 @@ export function deletePromotion(data: AppData, id: string): AppData {
   return { ...data, promotions: data.promotions.filter((p) => p.id !== id) };
 }
 
+/**
+ * A coach takes back a promotion. Unlike a person tidying their own history, this does move the
+ * rank: it falls to the highest promotion left, or to none.
+ */
+export function revokePromotion(data: AppData, id: string): AppData {
+  const promotions = data.promotions.filter((p) => p.id !== id);
+  const top = highestPromotion(promotions);
+  return { ...data, promotions, rank: top ? { belt: top.belt, stripes: top.stripes } : null };
+}
+
 export function setRank(data: AppData, rank: Rank): Result<AppData> {
   if (!isValidRank(rank)) {
     return { ok: false, error: INVALID_RANK };

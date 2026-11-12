@@ -13,10 +13,47 @@ interface Props {
   rank: Rank;
   promotions: Promotion[];
   today: string;
+  /** Set when a coach is reading about a student, so the card speaks of "they" and not "you". */
+  forCoach?: boolean;
+}
+
+/** The words that differ between a person reading about themselves and a coach reading about them. */
+function voice(forCoach: boolean) {
+  return forCoach
+    ? {
+        have: "They've",
+        reach: 'They reach',
+        reached: 'they reached',
+        their: 'their',
+        toSee: 'Record their promotion to',
+        where: 'to see how far along they are',
+        hint: 'Minimum time is only one requirement. Promotion is your decision.',
+        degreeHint: 'Minimum time is only one requirement. Degrees are also registered with the federation.',
+      }
+    : {
+        have: "You've",
+        reach: 'You reach',
+        reached: 'you reached',
+        their: 'your',
+        toSee: 'Log your promotion to',
+        where: 'in the timeline to see how far along you are',
+        hint: "Minimum time is only one requirement. Promotion is your professor's decision.",
+        degreeHint:
+          'Minimum time is only one requirement. Degrees are awarded by your professor and registered with the federation.',
+      };
 }
 
 /** Progress towards the next black belt degree. */
-function DegreeBody({ degree, today }: { degree: TimeInDegree; today: string }) {
+function DegreeBody({
+  degree,
+  today,
+  forCoach,
+}: {
+  degree: TimeInDegree;
+  today: string;
+  forCoach: boolean;
+}) {
+  const words = voice(forCoach);
   if (degree.status === 'top-degree') {
     return (
       <p className="muted">
@@ -30,8 +67,8 @@ function DegreeBody({ degree, today }: { degree: TimeInDegree; today: string }) 
   if (degree.status === 'start-unknown') {
     return (
       <p className="muted">
-        IBJJF requires {minimum} at {held} before the {next}. Log your promotion to{' '}
-        {degree.degree === 0 ? 'black belt' : held} in the timeline to see how far along you are.
+        IBJJF requires {minimum} at {held} before the {next}. {words.toSee}{' '}
+        {degree.degree === 0 ? 'black belt' : held} {words.where}.
       </p>
     );
   }
@@ -46,13 +83,13 @@ function DegreeBody({ degree, today }: { degree: TimeInDegree; today: string }) 
       />
       {degree.status === 'met' ? (
         <p>
-          <strong>Minimum met.</strong> You've spent {served} at {held}; IBJJF requires {minimum}{' '}
-          before the {next}, which you reached on {formatDate(degree.eligibleOn)}.
+          <strong>Minimum met.</strong> {words.have} spent {served} at {held}; IBJJF requires {minimum}{' '}
+          before the {next}, which {words.reached} on {formatDate(degree.eligibleOn)}.
         </p>
       ) : (
         <p>
           <strong>{served}</strong> of the {minimum} IBJJF requires at {held} before the {next}.
-          You reach the minimum on {formatDate(degree.eligibleOn)}, in{' '}
+          {words.reach} the minimum on {formatDate(degree.eligibleOn)}, in{' '}
           {formatDuration(today, degree.eligibleOn)}.
         </p>
       )}
@@ -60,18 +97,16 @@ function DegreeBody({ degree, today }: { degree: TimeInDegree; today: string }) 
   );
 }
 
-export function TimeInGradeCard({ rank, promotions, today }: Props) {
+export function TimeInGradeCard({ rank, promotions, today, forCoach = false }: Props) {
+  const words = voice(forCoach);
   const degree = timeInDegree(rank, promotions, today);
   if (degree) {
     return (
       <section className="card" aria-labelledby="grade-heading">
         <h2 id="grade-heading">Time in grade</h2>
-        <DegreeBody degree={degree} today={today} />
+        <DegreeBody degree={degree} today={today} forCoach={forCoach} />
         {degree.status !== 'top-degree' && (
-          <p className="hint">
-            Minimum time is only one requirement. Degrees are awarded by your professor and
-            registered with the federation.
-          </p>
+          <p className="hint">{words.degreeHint}</p>
         )}
       </section>
     );
@@ -97,8 +132,7 @@ export function TimeInGradeCard({ rank, promotions, today }: Props) {
   } else if (grade.status === 'start-unknown') {
     body = (
       <p className="muted">
-        IBJJF requires {minimum} at {belt} belt. Log your promotion to {belt} belt in the timeline
-        to see how far along you are.
+        IBJJF requires {minimum} at {belt} belt. {words.toSee} {belt} belt {words.where}.
       </p>
     );
   } else {
@@ -114,20 +148,20 @@ export function TimeInGradeCard({ rank, promotions, today }: Props) {
         />
         {grade.status === 'met' ? (
           <p>
-            <strong>Minimum met.</strong> You've spent {served} at {belt} belt; IBJJF requires{' '}
-            {minimum}, which you reached {grade.approximate ? 'by' : 'on'}{' '}
+            <strong>Minimum met.</strong> {words.have} spent {served} at {belt} belt; IBJJF requires{' '}
+            {minimum}, which {words.reached} {grade.approximate ? 'by' : 'on'}{' '}
             {formatDate(grade.eligibleOn)}.
           </p>
         ) : (
           <p>
-            <strong>{served}</strong> of the {minimum} IBJJF requires at {belt} belt. You reach the
+            <strong>{served}</strong> of the {minimum} IBJJF requires at {belt} belt. {words.reach} the
             minimum {grade.approximate ? 'by' : 'on'} {formatDate(grade.eligibleOn)}, in{' '}
             {formatDuration(today, grade.eligibleOn)}.
           </p>
         )}
         {grade.approximate && (
           <p className="muted">
-            Counted from your earliest {belt} belt entry, a stripe on {formatDate(grade.since)}.
+            Counted from {words.their} earliest {belt} belt entry, a stripe on {formatDate(grade.since)}.
             Log the belt promotion itself for an exact date.
           </p>
         )}
@@ -140,9 +174,7 @@ export function TimeInGradeCard({ rank, promotions, today }: Props) {
       <h2 id="grade-heading">Time in grade</h2>
       {body}
       {grade.status !== 'top-belt' && (
-        <p className="hint">
-          Minimum time is only one requirement. Promotion is your professor's decision.
-        </p>
+        <p className="hint">{words.hint}</p>
       )}
     </section>
   );
