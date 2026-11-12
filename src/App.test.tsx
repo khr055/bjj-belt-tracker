@@ -1209,6 +1209,31 @@ describe('Caught with', () => {
     ).toHaveTextContent('3 sessions');
   });
 
+  it('keeps a submission that was typed but not added when the session is logged', async () => {
+    seed({
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', caughtWith: ['Armbar'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    const form = screen.getByRole('form', { name: 'Log session' });
+    const box = within(form).getByLabelText('Add a submission you were caught with');
+    // Typed in another case, and never confirmed with Add or Enter.
+    await user.type(box, 'ARMBAR');
+    await user.click(within(form).getByRole('button', { name: 'Log session' }));
+    expect(stored().sessions[1].caughtWith).toEqual(['Armbar']);
+    // The box is cleared with the rest, so it does not carry into the next session.
+    expect(box).toHaveValue('');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const edit = screen.getByRole('form', { name: 'Edit session' });
+    await user.type(within(edit).getByLabelText('Add a submission you were caught with'), 'Kimura');
+    await user.click(within(edit).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0].caughtWith).toEqual(['Armbar', 'Kimura']);
+  });
+
   it('takes a submission off a session when it is edited, and hides the card with none', async () => {
     seed({
       sessions: [
@@ -1264,6 +1289,25 @@ describe('A link on a technique', () => {
     await user.click(within(edit).getByRole('button', { name: 'Save changes' }));
     expect(stored().techniques[0]).not.toHaveProperty('link');
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});
+
+describe('The trends card with and without sessions', () => {
+  it('survives the first session being logged and the last one deleted', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    expect(screen.getByText('Log a few sessions to see your weekly trend and streak.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Log session' }));
+    const chart = screen.getByRole('group', { name: 'Sessions per week, last 8 weeks' });
+    await user.click(within(chart).getByRole('button', { name: 'Hours' }));
+    expect(screen.getByRole('group', { name: 'Hours per week, last 8 weeks' })).toBeInTheDocument();
+
+    const label = `Gi session on ${formatDate(todayIso())}`;
+    await user.click(screen.getByRole('button', { name: `Delete ${label}` }));
+    await user.click(screen.getByRole('button', { name: `Confirm delete ${label}` }));
+    expect(screen.getByText('Log a few sessions to see your weekly trend and streak.')).toBeInTheDocument();
   });
 });
 
@@ -1831,7 +1875,7 @@ describe('Backup and restore', () => {
     await user.upload(screen.getByLabelText('Backup file'), backupFile(HISTORY));
     const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
     expect(confirm).toHaveTextContent(
-      'Add to this device keeps everything here and adds what is missing: 2 promotions, 1 competition and 1 technique. 1 record already here stays as this device has it.',
+      'Add to this device keeps everything here and adds what is missing: 2 promotions, 1 competition and 1 technique; your weekly goal is set to 2. 1 record already here stays as this device has it.',
     );
     expect(stored()).toEqual(existing);
 
@@ -1847,6 +1891,53 @@ describe('Backup and restore', () => {
     );
     // The device now holds more than the file, so it does not count as backed up.
     expect(window.localStorage.getItem(LAST_BACKUP_KEY)).toBeNull();
+  });
+
+  it('offers a higher rank and a weekly goal from a backup that holds no new records', async () => {
+    const existing: AppData = {
+      ...emptyData(),
+      rank: { belt: 'white', stripes: 4 },
+      sessions: [{ id: 's1', date: '2025-03-01', durationMinutes: 60, type: 'gi' }],
+    };
+    seed(existing);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    const file: AppData = { ...existing, rank: { belt: 'blue', stripes: 0 }, weeklyGoal: 3 };
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(file));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent(
+      'adds what is missing: your rank moves up to Blue belt; your weekly goal is set to 3.',
+    );
+    await user.click(within(confirm).getByRole('button', { name: 'Add to this device' }));
+    expect(stored()).toEqual({ ...existing, rank: { belt: 'blue', stripes: 0 }, weeklyGoal: 3 });
+    expect(screen.getByRole('status')).toHaveTextContent('Updated this device from the backup.');
+  });
+
+  it('says so when matches in a backup do not fit in a full competition', async () => {
+    const open = { id: 'c1', date: '2025-04-12', name: 'Spring Open', type: 'gi' as const };
+    const match = (id: string) => ({ id, result: 'win' as const, method: 'points' as const });
+    const existing: AppData = {
+      ...emptyData(),
+      competitions: [{ ...open, matches: Array.from({ length: 30 }, (_, i) => match(`here-${i}`)) }],
+    };
+    seed(existing);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Backup' }));
+
+    const file: AppData = {
+      ...emptyData(),
+      competitions: [{ ...open, matches: [match('there-1'), match('there-2')] }],
+    };
+    await user.upload(screen.getByLabelText('Backup file'), backupFile(file));
+    const confirm = await screen.findByRole('group', { name: 'Confirm restore' });
+    expect(confirm).toHaveTextContent(
+      "2 matches in the backup can't be added: a competition holds up to 30 matches, and the one on this device is full.",
+    );
+    expect(confirm).not.toHaveTextContent('Everything in this backup is already on this device');
+    expect(within(confirm).queryByRole('button', { name: 'Add to this device' })).not.toBeInTheDocument();
   });
 
   it('offers only to replace when the backup has nothing new, or cannot be added', async () => {
@@ -2097,6 +2188,41 @@ describe('Training calendar', () => {
     expect(
       within(card).getByRole('button', { name: `${longDate(today)} (today): nothing logged` }),
     ).toBeInTheDocument();
+  });
+
+  it('hands focus to today when "This month" is used, and leaves browser shortcuts alone', async () => {
+    const today = todayIso();
+    const { user, card } = await openCalendar();
+    await user.click(within(card).getByRole('button', { name: 'Previous month' }));
+    const back = within(card).getByRole('button', { name: 'This month' });
+    back.focus();
+    await user.keyboard('{Enter}');
+    // The button is gone now; focus must not fall back to the top of the page.
+    expect(within(card).queryByRole('button', { name: 'This month' })).not.toBeInTheDocument();
+    expect(document.activeElement).toHaveAccessibleName(
+      `${longDate(today)} (today): nothing logged`,
+    );
+
+    // With a modifier held, the arrow keys belong to the browser (Alt+Left is Back).
+    await user.keyboard('{Alt>}{ArrowLeft}{/Alt}{Control>}{Home}{/Control}{Meta>}{ArrowLeft}{/Meta}');
+    expect(document.activeElement).toHaveAccessibleName(
+      `${longDate(today)} (today): nothing logged`,
+    );
+  });
+
+  it('caps the badge on a day with many sessions, and still says how many', async () => {
+    const today = todayIso();
+    seed({
+      sessions: Array.from({ length: 12 }, (_, index) => ({
+        id: `s${index}`,
+        date: today,
+        durationMinutes: 30,
+        type: 'gi' as const,
+      })),
+    });
+    const { card } = await openCalendar();
+    const day = within(card).getByRole('button', { name: `${longDate(today)} (today): 12 sessions` });
+    expect(day).toHaveTextContent('9+');
   });
 
   it('reaches every day from the keyboard, with one stop for Tab', async () => {

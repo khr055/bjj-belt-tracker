@@ -70,6 +70,9 @@ function DayDetails({ day }: { day: CalendarDay }) {
   );
 }
 
+/** The highest session count a day's badge spells out; the day's name and details say the rest. */
+const MOST_COUNTED = 9;
+
 export function CalendarCard({ data, today }: Props) {
   const thisMonth = monthOf(today);
   const [shown, setShown] = useState<YearMonth>(thisMonth);
@@ -101,6 +104,8 @@ export function CalendarCard({ data, today }: Props) {
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
+    // With a modifier held these keys are the browser's own, such as Alt+Left for Back.
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const from = (event.target as HTMLElement).closest('button')?.dataset.date;
     const to = from ? moveDay(from, event.key) : null;
     if (to === null) return;
@@ -115,7 +120,16 @@ export function CalendarCard({ data, today }: Props) {
       <div className="card__header calendar__header">
         <h2 id="calendar-heading">Calendar</h2>
         {!isSameMonth(shown, thisMonth) && (
-          <button type="button" className="button button--small" onClick={() => show(thisMonth)}>
+          <button
+            type="button"
+            className="button button--small"
+            onClick={() => {
+              // The button goes once the month is back, so focus is handed to today's day.
+              focusNext.current = today;
+              setCursor(today);
+              show(thisMonth);
+            }}
+          >
             This month
           </button>
         )}
@@ -191,7 +205,9 @@ export function CalendarCard({ data, today }: Props) {
                       <span className="calendar__number">{day.day}</span>
                       <span className="calendar__marks">
                         {day.sessions.length > 0 && (
-                          <span className="calendar__count">{day.sessions.length}</span>
+                          <span className="calendar__count">
+                            {day.sessions.length > MOST_COUNTED ? `${MOST_COUNTED}+` : day.sessions.length}
+                          </span>
                         )}
                         {day.promotions.length > 0 && <span className="calendar__mark">★</span>}
                         {day.competitions.length > 0 && <span className="calendar__mark">◆</span>}

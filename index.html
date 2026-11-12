@@ -13,14 +13,17 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
       // Point the three links above at the icons for the stored rank before anything loads, so
-      // the tab never shows the default first and an install made straight away gets the right
+      // the tab does not show the default first and an install made straight away gets the right
       // icon. src/state/useRankIcons.ts keeps them current after that, and a test holds this
       // copy of the file names to src/domain/rankIcons.ts. Stored data is untrusted: anything
-      // unexpected leaves the defaults in place.
+      // unexpected leaves the defaults in place. This reads the stored rank as it is; where the
+      // app would correct it (a rank lower than a logged promotion), the links follow a moment
+      // later, when the app starts.
       (function () {
         try {
           var rank = JSON.parse(localStorage.getItem('bjj-belt-tracker:v1')).rank;
           var most = { white: 4, blue: 4, purple: 4, brown: 4, black: 6 };
+          if (typeof rank.belt !== 'string') return;
           if (!Object.prototype.hasOwnProperty.call(most, rank.belt)) return;
           if (!Number.isInteger(rank.stripes) || rank.stripes < 0 || rank.stripes > most[rank.belt]) return;
           var base = '/ranks/' + rank.belt + '-' + rank.stripes;

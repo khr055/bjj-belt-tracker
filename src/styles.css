@@ -977,31 +977,39 @@ input[type='file'] {
   font-weight: 700;
 }
 
+/* A count, a star and a diamond together must fit a day cell on a 320px screen. */
 .calendar__marks {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-height: 16px;
+  gap: 1px;
+  max-width: 100%;
+  min-height: 14px;
   line-height: 1;
 }
 
 .calendar__count {
   display: inline-block;
-  min-width: 16px;
-  padding: 0 4px;
+  min-width: 14px;
+  padding: 0 3px;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-text);
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  line-height: 16px;
+  line-height: 14px;
   text-align: center;
 }
 
 .calendar__mark {
-  font-size: 0.8rem;
+  font-size: 0.6rem;
   line-height: 1;
+}
+
+/* The key under the grid has room for them at a comfortable size. */
+.calendar__key .calendar__mark {
+  font-size: 0.8rem;
 }
 
 .calendar__key {

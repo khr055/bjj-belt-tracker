@@ -6,7 +6,14 @@ import {
   type BackupContents,
 } from '../domain/backup';
 import { formatDate } from '../domain/dates';
-import { describeAdded, mergeData, totalAdded } from '../domain/merge';
+import {
+  changesAnything,
+  describeAdded,
+  mergeData,
+  MAX_MATCHES_NOTE,
+  totalAdded,
+  type Merged,
+} from '../domain/merge';
 import { formatRank } from '../domain/rank';
 import type { AppData } from '../domain/types';
 import { canShareFiles, downloadTextFile, readFileText, shareTextFile } from '../state/files';
@@ -39,6 +46,16 @@ function describe(data: AppData): string {
       ? [`${data.timeOff.length} ${data.timeOff.length === 1 ? 'period' : 'periods'} of time off`]
       : []),
   ].join(' · ');
+}
+
+/** What adding the file brings: the records, then a raised rank or a goal taken from it. */
+function describeMerge(merged: Merged): string {
+  const parts = [
+    totalAdded(merged.added) > 0 ? describeAdded(merged.added) : '',
+    merged.rankRaisedTo ? `your rank moves up to ${formatRank(merged.rankRaisedTo)}` : '',
+    merged.goalSetTo !== null ? `your weekly goal is set to ${merged.goalSetTo}` : '',
+  ].filter(Boolean);
+  return parts.join('; ');
 }
 
 function isEmpty(data: AppData): boolean {
@@ -103,7 +120,8 @@ export function BackupView({ data, today, onRestore }: Props) {
     onRestore(merge.value.data);
     // The device now holds more than the file does, so this is not a backup of it.
     setPending(null);
-    setStatus(`Added ${describeAdded(merge.value.added)}.`);
+    const added = describeAdded(merge.value.added);
+    setStatus(added ? `Added ${added}.` : 'Updated this device from the backup.');
   };
 
   const restore = () => {
@@ -197,19 +215,26 @@ export function BackupView({ data, today, onRestore }: Props) {
             {nothingToBackUp && (
               <p className="muted">This device has no data yet, so nothing will be overwritten.</p>
             )}
-            {merge?.ok && totalAdded(merge.value.added) > 0 && (
+            {merge?.ok && changesAnything(merge.value) && (
               <p>
                 <strong>Add to this device</strong> keeps everything here and adds what is
-                missing: {describeAdded(merge.value.added)}.
+                missing: {describeMerge(merge.value)}.
                 {merge.value.alreadyHere > 0 &&
                   ` ${count(merge.value.alreadyHere, 'record')} already here ${
                     merge.value.alreadyHere === 1 ? 'stays' : 'stay'
                   } as this device has ${merge.value.alreadyHere === 1 ? 'it' : 'them'}.`}
               </p>
             )}
-            {merge?.ok && totalAdded(merge.value.added) === 0 && (
+            {merge?.ok && !changesAnything(merge.value) && merge.value.matchesLeftOut === 0 && (
               <p className="muted">
                 Everything in this backup is already on this device, so there is nothing to add.
+              </p>
+            )}
+            {merge?.ok && merge.value.matchesLeftOut > 0 && (
+              <p className="notice">
+                {merge.value.matchesLeftOut}{' '}
+                {merge.value.matchesLeftOut === 1 ? 'match' : 'matches'} in the backup can't be
+                added: {MAX_MATCHES_NOTE}
               </p>
             )}
             {merge && !merge.ok && (
@@ -222,7 +247,7 @@ export function BackupView({ data, today, onRestore }: Props) {
               </p>
             )}
             <div className="actions">
-              {merge?.ok && totalAdded(merge.value.added) > 0 && (
+              {merge?.ok && changesAnything(merge.value) && (
                 <button type="button" className="button button--primary" onClick={add}>
                   Add to this device
                 </button>
@@ -234,11 +259,11 @@ export function BackupView({ data, today, onRestore }: Props) {
                 Cancel
               </button>
             </div>
-            {merge?.ok && totalAdded(merge.value.added) > 0 && (
+            {merge?.ok && changesAnything(merge.value) && (
               <p className="hint">
-                Adding never removes or changes anything here. A record you changed on the other
-                device keeps this device's version, and one you deleted here comes back if the
-                backup still has it.
+                Adding never removes a record or changes one that is here. A record you changed on
+                the other device keeps this device's version, and one you deleted here comes back
+                if the backup still has it.
               </p>
             )}
           </div>

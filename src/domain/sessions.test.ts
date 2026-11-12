@@ -13,6 +13,7 @@ import {
   sessionDefaults,
   sortSessions,
   updateSession,
+  withTypedName,
   type SessionInput,
 } from './sessions';
 import { emptyData, type AppData, type Promotion, type Session } from './types';
@@ -287,5 +288,17 @@ describe('what a session was caught with', () => {
   it('finds a session by what it was caught with', () => {
     const data = mustAdd(mustAdd(emptyData(), { ...base, caughtWith: ['Bow and arrow'] }), base);
     expect(filterSessions(data.sessions, { type: 'all', text: 'arrow' })).toHaveLength(1);
+  });
+});
+
+describe('withTypedName', () => {
+  it('adds a typed name to the ones ticked, in the spelling it already has', () => {
+    expect(withTypedName(['Armbar'], ' kimura ', ['Kimura', 'Armbar'])).toEqual(['Armbar', 'Kimura']);
+    expect(withTypedName([], 'Bow  and arrow', [])).toEqual(['Bow and arrow']);
+  });
+
+  it('adds nothing for a blank, or a name already ticked', () => {
+    expect(withTypedName(['Armbar'], '   ', [])).toEqual(['Armbar']);
+    expect(withTypedName(['Armbar'], 'ARMBAR', [])).toEqual(['Armbar']);
   });
 });

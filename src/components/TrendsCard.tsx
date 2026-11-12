@@ -124,6 +124,7 @@ function streakDetail(streak: WeeklyStreak, offToday: boolean): string {
 }
 
 export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: Props) {
+  const [metric, setMetric] = useState<TrendMetric>('sessions');
   if (sessions.length === 0) {
     return (
       <section className="card" aria-labelledby="trends-heading">
@@ -134,7 +135,6 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
     );
   }
 
-  const [metric, setMetric] = useState<TrendMetric>('sessions');
   const weeks = weeklyTotals(sessions, today, TREND_WEEKS, timeOff);
   const values = weeks.map((week) => metricValue(week, metric));
   // The goal is in sessions, so its line belongs only on the sessions chart.

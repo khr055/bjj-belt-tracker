@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react';
 import {
   MAX_NOTES_LENGTH,
   MAX_ROUNDS,
+  withTypedName,
   SESSION_KIND_LABELS,
   SESSION_TYPE_LABELS,
   type SessionDefaults,
@@ -53,6 +54,7 @@ export function SessionForm({
   const [techniqueIds, setTechniqueIds] = useState(initial?.techniqueIds ?? []);
   const [landedIds, setLandedIds] = useState(initial?.landedIds ?? []);
   const [caughtWith, setCaughtWith] = useState(initial?.caughtWith ?? []);
+  const [caughtTyped, setCaughtTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -68,7 +70,8 @@ export function SessionForm({
       notes,
       techniqueIds,
       landedIds,
-      caughtWith,
+      // A name typed but not added with the button is still meant for this session.
+      caughtWith: withTypedName(caughtWith, caughtTyped, caughtBefore),
     });
     setError(problem);
     // A new session keeps its date, duration, type and kind so the next class can be logged
@@ -81,6 +84,7 @@ export function SessionForm({
       setTechniqueIds([]);
       setLandedIds([]);
       setCaughtWith([]);
+      setCaughtTyped('');
     }
   };
 
@@ -184,7 +188,13 @@ export function SessionForm({
           techniqueIds.includes(technique.id) || technique.status === 'landing'
         }
       />
-      <CaughtPicker suggestions={caughtBefore} selected={caughtWith} onChange={setCaughtWith} />
+      <CaughtPicker
+        suggestions={caughtBefore}
+        selected={caughtWith}
+        onChange={setCaughtWith}
+        typed={caughtTyped}
+        onTypedChange={setCaughtTyped}
+      />
       <div className="field">
         <label htmlFor={`${id}-notes`}>
           Notes <span className="muted">(optional)</span>

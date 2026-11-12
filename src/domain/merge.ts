@@ -22,7 +22,21 @@ export interface Merged {
   added: MergeCounts;
   /** Records in the file that the device already had, which were left as the device has them. */
   alreadyHere: number;
+  /** Matches left out because their competition already holds as many as the app keeps. */
+  matchesLeftOut: number;
+  /** The rank the device moves up to, when the file's is higher; null when it stays as it is. */
+  rankRaisedTo: Rank | null;
+  /** The weekly goal taken from the file, when the device had none; null otherwise. */
+  goalSetTo: number | null;
 }
+
+/** Whether adding the file would change anything on the device at all. */
+export function changesAnything(merged: Merged): boolean {
+  return totalAdded(merged.added) > 0 || merged.rankRaisedTo !== null || merged.goalSetTo !== null;
+}
+
+/** Why some matches in a file stay out of a merge. */
+export const MAX_MATCHES_NOTE = `a competition holds up to ${MAX_MATCHES} matches, and the one on this device is full.`;
 
 export const NOTHING_ADDED: MergeCounts = {
   promotions: 0,
@@ -62,6 +76,7 @@ function higher(a: Rank | null, b: Rank | null): Rank | null {
 export function mergeData(device: AppData, file: AppData, today: string): Result<Merged> {
   const added: MergeCounts = { ...NOTHING_ADDED };
   let alreadyHere = 0;
+  let matchesLeftOut = 0;
 
   // Techniques first, since sessions and matches point at them. Where the file's technique is
   // the device's under another id, what points at it in the file is pointed at the device's.
@@ -131,6 +146,7 @@ export function mergeData(device: AppData, file: AppData, today: string): Result
     const gained = missing.slice(0, room);
     alreadyHere += other.matches.length - missing.length;
     added.matches += gained.length;
+    matchesLeftOut += missing.length - gained.length;
     competitions.push(
       gained.length > 0 ? { ...competition, matches: [...competition.matches, ...gained] } : competition,
     );
@@ -180,8 +196,13 @@ export function mergeData(device: AppData, file: AppData, today: string): Result
   }
 
   const top = highestPromotion(promotions);
+  const rank = higher(
+    higher(device.rank, file.rank),
+    top ? { belt: top.belt, stripes: top.stripes } : null,
+  );
+  const rankRaised = rank !== null && (device.rank === null || rankValue(rank) > rankValue(device.rank));
   const merged: AppData = {
-    rank: higher(higher(device.rank, file.rank), top ? { belt: top.belt, stripes: top.stripes } : null),
+    rank,
     promotions,
     sessions,
     // The device's own goal stands; the file's is taken only when the device has none.
@@ -191,7 +212,17 @@ export function mergeData(device: AppData, file: AppData, today: string): Result
     timeOff,
   };
   // Both halves were valid alone; this makes sure the whole is too.
-  return { ok: true, value: { data: parseData(merged), added, alreadyHere } };
+  return {
+    ok: true,
+    value: {
+      data: parseData(merged),
+      added,
+      alreadyHere,
+      matchesLeftOut,
+      rankRaisedTo: rankRaised ? rank : null,
+      goalSetTo: device.weeklyGoal === null ? file.weeklyGoal : null,
+    },
+  };
 }
 
 /** "12 sessions, 1 promotion and 2 techniques", naming only what was added. */

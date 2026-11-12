@@ -52,11 +52,15 @@ export function cleanLink(value: unknown): string | undefined | null {
   const text = value.trim();
   if (!text) return undefined;
   if (text.length > MAX_LINK_LENGTH || /\s/.test(text)) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  // "site.com:8080/x" starts like a scheme but is a host and its port, so a colon followed by a
+  // digit is not taken for one.
+  const withScheme = /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(text) ? text : `https://${text}`;
   try {
     const url = new URL(withScheme);
     const web = url.protocol === 'http:' || url.protocol === 'https:';
-    return web && url.hostname.includes('.') ? url.href : null;
+    // The stored form can be longer than what was typed (the scheme is added and other scripts
+    // are encoded), and it is the stored form that is checked when the data is next read.
+    return web && url.hostname.includes('.') && url.href.length <= MAX_LINK_LENGTH ? url.href : null;
   } catch {
     return null;
   }

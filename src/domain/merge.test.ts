@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { describeAdded, mergeData, NOTHING_ADDED, totalAdded, type Merged } from './merge';
+import {
+  changesAnything,
+  describeAdded,
+  mergeData,
+  NOTHING_ADDED,
+  totalAdded,
+  type Merged,
+} from './merge';
 import { emptyData, type AppData, type Session, type Technique } from './types';
 
 const TODAY = '2026-11-11';
@@ -143,6 +150,44 @@ describe('mergeData', () => {
     expect(data.promotions.map((p) => p.id)).toEqual(['p-start', 'p-blue', 'p-blue-1']);
     expect(data.rank).toEqual({ belt: 'blue', stripes: 1 });
     expect(added.promotions).toBe(1);
+  });
+
+  it('counts the matches that do not fit in a full competition', () => {
+    const open = { id: 'c1', date: '2026-10-17', name: 'Autumn Open', type: 'gi' as const };
+    const match = (id: string) => ({ id, result: 'win' as const, method: 'points' as const });
+    const full = Array.from({ length: 29 }, (_, index) => match(`here-${index}`));
+    const device: AppData = { ...emptyData(), competitions: [{ ...open, matches: full }] };
+    const file: AppData = {
+      ...emptyData(),
+      competitions: [{ ...open, matches: [match('a'), match('b'), match('c')] }],
+    };
+    const merged = must(device, file);
+    expect(merged.data.competitions[0].matches).toHaveLength(30);
+    expect(merged.added.matches).toBe(1);
+    expect(merged.matchesLeftOut).toBe(2);
+
+    // With no room at all nothing is added, and that is not the same as nothing being new.
+    const none = must({ ...emptyData(), competitions: [{ ...open, matches: [...full, match('z')] }] }, file);
+    expect(totalAdded(none.added)).toBe(0);
+    expect(none.matchesLeftOut).toBe(3);
+  });
+
+  it('reports a raised rank and a goal taken from the file, even with no new records', () => {
+    const device: AppData = { ...PHONE, weeklyGoal: null };
+    const file: AppData = { ...device, rank: { belt: 'blue', stripes: 2 }, weeklyGoal: 4 };
+    const merged = must(device, file);
+    expect(totalAdded(merged.added)).toBe(0);
+    expect(merged.rankRaisedTo).toEqual({ belt: 'blue', stripes: 2 });
+    expect(merged.goalSetTo).toBe(4);
+    expect(changesAnything(merged)).toBe(true);
+
+    const same = must(PHONE, PHONE);
+    expect(same.rankRaisedTo).toBeNull();
+    expect(same.goalSetTo).toBeNull();
+    expect(changesAnything(same)).toBe(false);
+    // A lower rank in the file, and a goal the device already has, change nothing.
+    const lower = must(PHONE, { ...PHONE, rank: { belt: 'white', stripes: 0 }, weeklyGoal: 7 });
+    expect(changesAnything(lower)).toBe(false);
   });
 
   it('never lowers the rank, and takes the higher of the two', () => {

@@ -1,11 +1,17 @@
-import { useId, useState, type KeyboardEvent } from 'react';
-import { MAX_CAUGHT, MAX_CAUGHT_LENGTH, sameName } from '../domain/sessions';
+import { useId, type KeyboardEvent } from 'react';
+import { MAX_CAUGHT, MAX_CAUGHT_LENGTH, sameName, withTypedName } from '../domain/sessions';
 
 interface Props {
   /** Names used on earlier sessions, most common first, offered as one-tap choices. */
   suggestions: string[];
   selected: string[];
   onChange(names: string[]): void;
+  /**
+   * What is in the text box. The form holds it, so a name typed but not added still goes on the
+   * session when the form is saved.
+   */
+  typed: string;
+  onTypedChange(text: string): void;
 }
 
 /** Suggestions shown before the rest are asked for. */
@@ -16,9 +22,8 @@ const OFFERED = 6;
  * submissions, so they are plain names and not techniques from the journal; names used before
  * are offered so the same one is spelt the same way each time.
  */
-export function CaughtPicker({ suggestions, selected, onChange }: Props) {
+export function CaughtPicker({ suggestions, selected, onChange, typed, onTypedChange }: Props) {
   const id = useId();
-  const [text, setText] = useState('');
   const isSelected = (name: string) => selected.some((other) => sameName(other, name));
   // What is ticked is always shown, whether or not it was suggested.
   const shown = [
@@ -33,12 +38,9 @@ export function CaughtPicker({ suggestions, selected, onChange }: Props) {
     );
 
   const add = () => {
-    const name = text.trim().replace(/\s+/g, ' ');
-    if (!name || full) return;
-    // A name used before keeps the spelling it already has.
-    const known = suggestions.find((other) => sameName(other, name)) ?? name;
-    if (!isSelected(known)) onChange([...selected, known]);
-    setText('');
+    if (full) return;
+    onChange(withTypedName(selected, typed, suggestions));
+    onTypedChange('');
   };
 
   // Enter adds the name; it must not log the whole session.
@@ -76,11 +78,11 @@ export function CaughtPicker({ suggestions, selected, onChange }: Props) {
           <input
             id={`${id}-other`}
             type="text"
-            value={text}
+            value={typed}
             maxLength={MAX_CAUGHT_LENGTH}
             autoComplete="off"
             disabled={full}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => onTypedChange(event.target.value)}
             onKeyDown={onKeyDown}
           />
         </div>

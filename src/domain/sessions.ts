@@ -51,6 +51,16 @@ export function cleanCaught(names: unknown): string[] {
   return kept;
 }
 
+/**
+ * The names ticked, plus one typed but not yet added. A name used before, or already ticked,
+ * keeps the spelling it has.
+ */
+export function withTypedName(selected: string[], typed: string, known: string[]): string[] {
+  const [name] = cleanCaught([typed]);
+  if (!name || selected.some((other) => sameName(other, name))) return selected;
+  return [...selected, known.find((other) => sameName(other, name)) ?? name];
+}
+
 export function isValidRounds(rounds: unknown): rounds is number {
   return (
     typeof rounds === 'number' && Number.isInteger(rounds) && rounds >= 0 && rounds <= MAX_ROUNDS

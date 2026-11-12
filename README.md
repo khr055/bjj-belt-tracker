@@ -74,9 +74,14 @@ keeps everything on the device and brings in what the device is missing.
   already has is the same promotion, even where each device made its own.
 - A competition on both keeps the device's details and gains any matches it is missing.
 - The rank is the higher of the two. The weekly goal is the device's, or the backup's if the
-  device has none.
+  device has none. These are offered even when the backup holds no new records.
 - The same session logged separately on both devices is two sessions: there is nothing to say
-  they are the same one.
+  they are the same one. The same goes for a competition or a period of time off entered on
+  both.
+- A technique renamed on one device keeps the name this device has, and the backup's sessions
+  and matches that used it appear under that name.
+- A competition holds up to 30 matches. Matches in the backup that do not fit are left out, and
+  the app says how many.
 - If the promotions in the backup cannot sit in one history with the device's, adding is not
   offered.
 

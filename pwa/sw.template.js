@@ -1,5 +1,6 @@
 // Service worker body. The build prepends CACHE_NAME and PRECACHE_URLS (see service-worker.ts),
-// so every deploy gets its own cache holding exactly the files that deploy shipped.
+// so every deploy gets its own cache. It starts with the files that deploy shipped, less the
+// per-rank icons and manifests, which are added as they are first fetched.
 //
 // The whole app is served cache-first, which makes it open instantly and work with no signal.
 // A new deploy is picked up in the background and shown the next time the app is opened.
@@ -40,8 +41,15 @@ self.addEventListener('fetch', (event) => {
   // Every page load gets the app shell; everything else is looked up by its own URL.
   const key = request.mode === 'navigate' ? '/' : request;
   // The icons and manifest for the current rank are not precached (there is a set per rank), so
-  // a copy is kept the first time each is fetched. They then work offline like everything else.
-  const keep = request.mode !== 'navigate' && new URL(request.url).pathname.startsWith(RANK_FILES);
+  // a copy is kept the first time each is fetched, and they work offline until the next deploy
+  // starts a new cache. Only a real rank file is kept: no query strings, and nothing else that
+  // happens to sit under the same path.
+  const { pathname, search } = new URL(request.url);
+  const keep =
+    request.mode !== 'navigate' &&
+    search === '' &&
+    pathname.startsWith(RANK_FILES) &&
+    /^[a-z]+-\d(-\d+)?\.(png|webmanifest)$/.test(pathname.slice(RANK_FILES.length));
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       // The precache is keyed by URL alone; a `Vary` header from the host must not cause misses.
@@ -49,7 +57,10 @@ self.addEventListener('fetch', (event) => {
         (cached) =>
           cached ??
           fetch(request).then((response) => {
-            if (keep && response.ok) event.waitUntil(cache.put(request, response.clone()));
+            // A partial (206) response cannot be cached, and an error page must not be.
+            if (keep && response.status === 200) {
+              event.waitUntil(cache.put(request, response.clone()));
+            }
             return response;
           }),
       ),

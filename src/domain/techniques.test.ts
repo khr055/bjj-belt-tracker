@@ -522,6 +522,25 @@ describe('a link on a technique', () => {
     expect(cleanLink(value)).toBeNull();
   });
 
+  it('takes a host with a port, typed without a scheme, as a web address', () => {
+    expect(cleanLink('mysite.com:8080/x')).toBe('https://mysite.com:8080/x');
+    expect(cleanLink('youtube.com:443/watch')).toBe('https://youtube.com/watch');
+  });
+
+  it('keeps only a link that is within the limit in the form it is stored', () => {
+    // 498 characters typed, 506 once https:// is added.
+    expect(cleanLink(`example.com/${'a'.repeat(486)}`)).toBeNull();
+    // 72 characters typed, far more once the other script is encoded.
+    expect(cleanLink(`example.com/${'技'.repeat(60)}`)).toBeNull();
+    const longest = `https://example.com/${'a'.repeat(480)}`;
+    expect(longest).toHaveLength(500);
+    expect(cleanLink(longest)).toBe(longest);
+    // Whatever is accepted is accepted again when read back.
+    const encoded = cleanLink(`example.com/${'技'.repeat(20)}`);
+    expect(encoded).toBeTruthy();
+    expect(cleanLink(encoded)).toBe(encoded);
+  });
+
   it('refuses anything that is not text', () => {
     expect(cleanLink(7)).toBeNull();
     expect(cleanLink({ href: 'https://example.com' })).toBeNull();
