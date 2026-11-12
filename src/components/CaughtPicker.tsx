@@ -81,7 +81,7 @@ export function CaughtPicker({ suggestions, selected, onChange, typed, onTypedCh
             value={typed}
             maxLength={MAX_CAUGHT_LENGTH}
             autoComplete="off"
-            disabled={full}
+            aria-describedby={full ? `${id}-full` : undefined}
             onChange={(event) => onTypedChange(event.target.value)}
             onKeyDown={onKeyDown}
           />
@@ -90,6 +90,13 @@ export function CaughtPicker({ suggestions, selected, onChange, typed, onTypedCh
           Add
         </button>
       </div>
+      {full && (
+        // The box is left usable at the limit, so text typed before the last tick can be cleared.
+        <p className="hint" id={`${id}-full`}>
+          That is the most a session holds ({MAX_CAUGHT}). Untick one to add another
+          {typed.trim() ? ', or clear the box to save.' : '.'}
+        </p>
+      )}
     </fieldset>
   );
 }

@@ -60,7 +60,12 @@ export function cleanLink(value: unknown): string | undefined | null {
     const web = url.protocol === 'http:' || url.protocol === 'https:';
     // The stored form can be longer than what was typed (the scheme is added and other scripts
     // are encoded), and it is the stored form that is checked when the data is next read.
-    return web && url.hostname.includes('.') && url.href.length <= MAX_LINK_LENGTH ? url.href : null;
+    // A name and password before the host are never part of a page's address, and are how
+    // "mailto:1@site.com" would otherwise be read as a link to site.com.
+    const plain = url.username === '' && url.password === '';
+    return web && plain && url.hostname.includes('.') && url.href.length <= MAX_LINK_LENGTH
+      ? url.href
+      : null;
   } catch {
     return null;
   }

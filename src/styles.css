@@ -1003,13 +1003,13 @@ input[type='file'] {
 }
 
 .calendar__mark {
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   line-height: 1;
 }
 
-/* The key under the grid has room for them at a comfortable size. */
-.calendar__key .calendar__mark {
-  font-size: 0.8rem;
+/* Only inside a day cell are the star and diamond small; the key and the details have room. */
+.calendar__marks .calendar__mark {
+  font-size: 0.6rem;
 }
 
 .calendar__key {

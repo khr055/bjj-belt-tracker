@@ -1234,6 +1234,39 @@ describe('Caught with', () => {
     expect(stored().sessions[0].caughtWith).toEqual(['Armbar', 'Kimura']);
   });
 
+  it('lets text typed before the tenth tick be cleared, so the session can be saved', async () => {
+    const names = Array.from({ length: 10 }, (_, index) => `Submission ${index + 1}`);
+    seed({
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', caughtWith: names.slice(0, 9) },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    await user.click(screen.getByRole('button', { name: 'Edit Gi session on 1 May 2024' }));
+    const form = screen.getByRole('form', { name: 'Edit session' });
+    const picker = within(form).getByRole('group', { name: /Caught with/ });
+    const box = within(picker).getByLabelText('Add a submission you were caught with');
+
+    await user.type(box, 'Kimura');
+    await user.type(box, '{Backspace}'.repeat(6));
+    await user.type(box, names[9]);
+    await user.click(within(picker).getByRole('button', { name: 'Add' }));
+    // Ten are ticked now. An eleventh typed in is refused, and can be cleared.
+    await user.type(box, 'Kimura');
+    expect(within(picker).getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(picker).toHaveTextContent('Untick one to add another, or clear the box to save.');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('Record up to 10 submissions');
+    expect(stored().sessions[0].caughtWith).toHaveLength(9);
+
+    expect(box).toBeEnabled();
+    await user.clear(box);
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().sessions[0].caughtWith).toEqual(names);
+  });
+
   it('takes a submission off a session when it is edited, and hides the card with none', async () => {
     seed({
       sessions: [
