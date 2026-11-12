@@ -4,7 +4,7 @@ import { competitionWins } from '../domain/competitions';
 import { describeSession } from '../domain/sessions';
 import {
   activityOf,
-  daysUntrained,
+  formatUntrained,
   groupByPosition,
   isStale,
   landedIn,
@@ -17,6 +17,7 @@ import {
   techniqueActivity,
   type TechniqueActivity,
   type TechniqueInput,
+  untrained,
 } from '../domain/techniques';
 import {
   TECHNIQUE_STATUSES,
@@ -24,6 +25,7 @@ import {
   type Session,
   type Technique,
   type TechniqueStatus,
+  type TimeOff,
 } from '../domain/types';
 import { ConfirmDelete } from './ConfirmDelete';
 import { TechniqueForm } from './TechniqueForm';
@@ -33,6 +35,8 @@ interface Props {
   sessions: Session[];
   /** For the matches each technique has won. */
   competitions: Competition[];
+  /** Days off do not count towards a technique going stale. */
+  timeOff: TimeOff[];
   today: string;
   onAdd(input: TechniqueInput): string | null;
   onUpdate(id: string, input: TechniqueInput): string | null;
@@ -113,6 +117,7 @@ export function TechniquesView({
   techniques,
   sessions,
   competitions,
+  timeOff,
   today,
   onAdd,
   onUpdate,
@@ -171,9 +176,9 @@ export function TechniquesView({
               Won {won} {won === 1 ? 'match' : 'matches'} in competition
             </span>
           )}
-          {isStale(technique, own, today) && (
+          {isStale(technique, own, today, timeOff) && (
             <span className="list__tally">
-              Not trained for {daysUntrained(technique, own, today)} days
+              Not trained for {formatUntrained(untrained(technique, own, today, timeOff))}
             </span>
           )}
         </div>

@@ -84,6 +84,7 @@ export default function App() {
               <TechniqueFocusCard
                 techniques={data.techniques}
                 sessions={data.sessions}
+                timeOff={data.timeOff}
                 today={today}
               />
             )}
@@ -155,6 +156,7 @@ export default function App() {
             techniques={data.techniques}
             sessions={data.sessions}
             competitions={data.competitions}
+            timeOff={data.timeOff}
             today={today}
             onAdd={(input) => actions.addTechnique(input, today)}
             onUpdate={(id, input) => actions.updateTechnique(id, input, today)}

@@ -15,6 +15,7 @@ import {
   setTechniqueStatus,
   daysUntrained,
   deleteTechnique,
+  formatUntrained,
   groupByPosition,
   isStale,
   landedIn,
@@ -23,10 +24,11 @@ import {
   statusCounts,
   techniqueActivity,
   techniqueFocus,
+  untrained,
   updateTechnique,
   type TechniqueInput,
 } from './techniques';
-import { emptyData, type AppData, type Session, type Technique } from './types';
+import { emptyData, type AppData, type Session, type Technique, type TimeOff } from './types';
 
 const TODAY = '2026-11-11';
 
@@ -419,5 +421,77 @@ describe('techniques landed in rolling', () => {
     const [left] = deleteTechnique(result.value, armbar.id).sessions;
     expect(left.techniqueIds).toEqual([kneeCut.id]);
     expect(left).not.toHaveProperty('landedIds');
+  });
+});
+
+describe('going stale around time off', () => {
+  const off = (startDate: string, endDate?: string): TimeOff => ({
+    id: startDate,
+    startDate,
+    ...(endDate ? { endDate } : {}),
+    reason: 'injury',
+  });
+  const drilling = technique({ id: 'x', status: 'drilling' });
+  // Trained 38 days before today.
+  const trained = { lastTrained: '2026-10-04' };
+
+  it('pauses the clock during time off', () => {
+    expect(untrained(drilling, trained, TODAY)).toEqual({ days: 38, daysOff: 0 });
+    expect(isStale(drilling, trained, TODAY)).toBe(true);
+
+    // Four weeks off, starting ten days after it was trained.
+    const timeOff = [off('2026-10-14', '2026-11-10')];
+    expect(untrained(drilling, trained, TODAY, timeOff)).toEqual({ days: 10, daysOff: 28 });
+    expect(daysUntrained(drilling, trained, TODAY, timeOff)).toBe(10);
+    expect(isStale(drilling, trained, TODAY, timeOff)).toBe(false);
+  });
+
+  it('goes stale once 30 days that were not time off have passed', () => {
+    const timeOff = [off('2026-10-14', '2026-10-21')];
+    // 38 days less 8 off is exactly 30.
+    expect(untrained(drilling, trained, TODAY, timeOff)).toEqual({ days: 30, daysOff: 8 });
+    expect(isStale(drilling, trained, TODAY, timeOff)).toBe(true);
+    expect(isStale(drilling, trained, TODAY, [off('2026-10-14', '2026-10-22')])).toBe(false);
+  });
+
+  it('holds everything while time off is still going on', () => {
+    const timeOff = [off('2026-10-14')];
+    expect(untrained(drilling, trained, TODAY, timeOff)).toEqual({ days: 9, daysOff: 29 });
+    expect(untrained(drilling, trained, '2027-03-01', timeOff)).toMatchObject({ days: 9 });
+  });
+
+  it('ignores time off from before it was last trained, and the day it was trained', () => {
+    expect(untrained(drilling, trained, TODAY, [off('2026-09-01', '2026-10-04')])).toEqual({
+      days: 38,
+      daysOff: 0,
+    });
+  });
+
+  it('pauses the clock for a technique that has never been trained', () => {
+    const added = technique({ id: 'new', addedOn: '2026-10-01' });
+    const never = { lastTrained: null };
+    expect(untrained(added, never, TODAY, [off('2026-10-05', '2026-10-25')])).toEqual({
+      days: 20,
+      daysOff: 21,
+    });
+  });
+
+  it('says how long, and how much time off was left out', () => {
+    expect(formatUntrained({ days: 31, daysOff: 0 })).toBe('31 days');
+    expect(formatUntrained({ days: 31, daysOff: 28 })).toBe('31 days, not counting 28 days off');
+    expect(formatUntrained({ days: 1, daysOff: 1 })).toBe('1 day, not counting 1 day off');
+  });
+
+  it('leaves time off out of what the overview calls stale', () => {
+    const techniques = [
+      technique({ id: 'held', name: 'Held' }),
+      technique({ id: 'stale', name: 'Stale' }),
+    ];
+    const sessions = [session('s1', '2026-10-04', ['held']), session('s2', '2026-08-01', ['stale'])];
+    const timeOff = [off('2026-10-14', '2026-11-10')];
+    const focus = techniqueFocus({ techniques, sessions, timeOff }, TODAY);
+    expect(focus.stale).toEqual([{ technique: techniques[1], days: 74, daysOff: 28 }]);
+    // Not stale, and trained more than 30 days ago all the same: it is still listed as recent.
+    expect(focus.recent.map((entry) => entry.technique.name)).toEqual(['Held']);
   });
 });

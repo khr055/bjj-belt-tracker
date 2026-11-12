@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addTimeOff,
   currentTimeOff,
+  daysOffBetween,
   deleteTimeOff,
   isDayOff,
   isWeekOff,
@@ -108,5 +109,32 @@ describe('which days and weeks are off', () => {
     expect(isWeekOff(periods, '2026-10-12', TODAY)).toBe(true);
     expect(isWeekOff(periods, '2026-10-19', TODAY)).toBe(true);
     expect(isWeekOff(periods, '2026-10-26', TODAY)).toBe(false);
+  });
+});
+
+describe('daysOffBetween', () => {
+  it('counts the days off inside a range, both ends included', () => {
+    const periods = [off('2026-10-05', '2026-10-18')];
+    expect(daysOffBetween(periods, '2026-10-01', '2026-10-31', TODAY)).toBe(14);
+    expect(daysOffBetween(periods, '2026-10-10', '2026-10-12', TODAY)).toBe(3);
+    expect(daysOffBetween(periods, '2026-10-18', '2026-10-31', TODAY)).toBe(1);
+    expect(daysOffBetween(periods, '2026-10-19', '2026-10-31', TODAY)).toBe(0);
+    expect(daysOffBetween(periods, '2026-10-20', '2026-10-10', TODAY)).toBe(0);
+    expect(daysOffBetween([], '2026-10-01', '2026-10-31', TODAY)).toBe(0);
+  });
+
+  it('does not count overlapping or repeated periods twice', () => {
+    const periods = [
+      off('2026-10-05', '2026-10-18'),
+      off('2026-10-10', '2026-10-20'), // overlaps the first
+      off('2026-10-12', '2026-10-13'), // inside both
+      off('2026-10-25', '2026-10-26'), // apart
+    ];
+    expect(daysOffBetween(periods, '2026-10-01', '2026-10-31', TODAY)).toBe(18);
+  });
+
+  it('runs time off with no last day up to today', () => {
+    // 2 Nov to 11 Nov is ten days.
+    expect(daysOffBetween([off('2026-11-02')], '2026-10-01', '2026-12-31', TODAY)).toBe(10);
   });
 });

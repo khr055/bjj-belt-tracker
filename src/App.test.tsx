@@ -1109,6 +1109,57 @@ describe('Time off', () => {
   });
 });
 
+describe('Stale techniques and time off', () => {
+  it('pauses the stale clock during time off, on the overview and in the journal', async () => {
+    const today = todayIso();
+    const technique = (id: string, name: string): Technique => ({
+      id,
+      name,
+      position: 'guard',
+      status: 'drilling',
+      addedOn: addDays(today, -200),
+      statusSince: addDays(today, -200),
+    });
+    seed({
+      techniques: [technique('t1', 'Armbar'), technique('t2', 'Triangle')],
+      sessions: [
+        { id: 's1', date: addDays(today, -40), durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+        { id: 's2', date: addDays(today, -90), durationMinutes: 60, type: 'gi', techniqueIds: ['t2'] },
+      ],
+    });
+    const user = userEvent.setup();
+    const first = render(<App />);
+    const card = () => screen.getByRole('region', { name: 'Techniques' });
+    // With no time off, both have gone stale.
+    expect(card()).toHaveTextContent('StaleTriangle (90 days), Armbar (40 days)');
+    expect(card()).toHaveTextContent('Stale means not trained for 30 days or more.');
+    first.unmount();
+
+    // Twenty days off, ending five days ago.
+    seed({
+      ...stored(),
+      timeOff: [
+        { id: 'o1', startDate: addDays(today, -24), endDate: addDays(today, -5), reason: 'injury' },
+      ],
+    });
+    render(<App />);
+    expect(card()).toHaveTextContent('StaleTriangle (70 days, not counting 20 days off)');
+    // Armbar is no longer stale, so it is back among what was trained lately.
+    expect(card()).toHaveTextContent(`RecentArmbar (${formatShortDate(addDays(today, -40))})`);
+    expect(card()).not.toHaveTextContent('Armbar (40 days');
+    expect(card()).toHaveTextContent(
+      'Stale means not trained for 30 days or more, not counting time off.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+    const [armbar, triangle] = within(screen.getByRole('list', { name: 'Guard' })).getAllByRole(
+      'listitem',
+    );
+    expect(armbar).not.toHaveTextContent('Not trained for');
+    expect(triangle).toHaveTextContent('Not trained for 70 days, not counting 20 days off');
+  });
+});
+
 describe('Black belt degrees', () => {
   it('sets a black belt rank in degrees, beyond the four a coloured belt holds', async () => {
     const user = userEvent.setup();

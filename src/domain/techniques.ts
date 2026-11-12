@@ -1,5 +1,6 @@
-import { daysBetween, isIsoDate } from './dates';
+import { addDays, daysBetween, isIsoDate } from './dates';
 import { MAX_NOTES_LENGTH, sortSessions } from './sessions';
+import { daysOffBetween } from './timeOff';
 import {
   newId,
   POSITIONS,
@@ -10,6 +11,7 @@ import {
   type Session,
   type Technique,
   type TechniqueStatus,
+  type TimeOff,
 } from './types';
 
 export type TechniqueInput = Omit<Technique, 'id' | 'addedOn' | 'statusSince'>;
@@ -294,50 +296,79 @@ export function isWorkingOn(technique: Technique): boolean {
   return technique.status !== 'landing';
 }
 
+export interface Untrained {
+  /** Days the technique could have been trained and was not: time off is left out. */
+  days: number;
+  /** Days of time off left out of the count. */
+  daysOff: number;
+}
+
 /**
- * Days since the technique was last trained, or since it was added if it has not been trained
- * since then.
+ * How long since the technique was last trained, or since it was added if it has not been
+ * trained since then. The clock is paused during time off, so those days are counted apart.
  */
+export function untrained(
+  technique: Technique,
+  activity: Pick<TechniqueActivity, 'lastTrained'>,
+  today: string,
+  timeOff: TimeOff[] = [],
+): Untrained {
+  const { lastTrained } = activity;
+  const since =
+    lastTrained !== null && lastTrained > technique.addedOn ? lastTrained : technique.addedOn;
+  if (!isIsoDate(since) || since >= today) return { days: 0, daysOff: 0 };
+  // The day it was last trained is not a day untrained, even if time off began that day.
+  const daysOff = daysOffBetween(timeOff, addDays(since, 1), today, today);
+  return { days: daysBetween(since, today) - daysOff, daysOff };
+}
+
+/** Days untrained, leaving out time off. */
 export function daysUntrained(
   technique: Technique,
   activity: Pick<TechniqueActivity, 'lastTrained'>,
   today: string,
+  timeOff: TimeOff[] = [],
 ): number {
-  const { lastTrained } = activity;
-  const since =
-    lastTrained !== null && lastTrained > technique.addedOn ? lastTrained : technique.addedOn;
-  return isIsoDate(since) ? daysBetween(since, today) : 0;
+  return untrained(technique, activity, today, timeOff).days;
 }
 
-/** Stale means still being worked on, and not trained for 30 days. */
+/** Stale means still being worked on, and not trained for 30 days, leaving out time off. */
 export function isStale(
   technique: Technique,
   activity: Pick<TechniqueActivity, 'lastTrained'>,
   today: string,
+  timeOff: TimeOff[] = [],
 ): boolean {
-  return isWorkingOn(technique) && daysUntrained(technique, activity, today) >= STALE_DAYS;
+  return isWorkingOn(technique) && daysUntrained(technique, activity, today, timeOff) >= STALE_DAYS;
+}
+
+/** "31 days", adding ", not counting 28 days off" when time off was left out. */
+export function formatUntrained({ days, daysOff }: Untrained): string {
+  const count = (amount: number) => `${amount} ${amount === 1 ? 'day' : 'days'}`;
+  return daysOff > 0 ? `${count(days)}, not counting ${count(daysOff)} off` : count(days);
 }
 
 export interface TechniqueFocus {
   counts: StatusCounts;
   /** Being worked on and trained in the last 30 days, most recently trained first. */
   recent: { technique: Technique; lastTrained: string }[];
-  /** Being worked on and not trained for 30 days, longest wait first. */
-  stale: { technique: Technique; days: number }[];
+  /** Being worked on and not trained for 30 days, leaving out time off; longest wait first. */
+  stale: ({ technique: Technique } & Untrained)[];
 }
 
 /** What the practitioner is working on at the moment, and what they have let slip. */
 export function techniqueFocus(
-  data: Pick<AppData, 'techniques' | 'sessions'>,
+  data: Pick<AppData, 'techniques' | 'sessions'> & Partial<Pick<AppData, 'timeOff'>>,
   today: string,
 ): TechniqueFocus {
+  const timeOff = data.timeOff ?? [];
   const activity = techniqueActivity(data.sessions);
   const recent: TechniqueFocus['recent'] = [];
   const stale: TechniqueFocus['stale'] = [];
   for (const technique of sortTechniques(data.techniques.filter(isWorkingOn))) {
     const own = activityOf(activity, technique);
-    if (isStale(technique, own, today)) {
-      stale.push({ technique, days: daysUntrained(technique, own, today) });
+    if (isStale(technique, own, today, timeOff)) {
+      stale.push({ technique, ...untrained(technique, own, today, timeOff) });
     } else if (own.lastTrained !== null) {
       recent.push({ technique, lastTrained: own.lastTrained });
     }

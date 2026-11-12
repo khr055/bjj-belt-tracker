@@ -41,7 +41,7 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 - Tick the techniques you landed in rolling when you log a session, and see how often and how
   recently each one has landed.
 - See what you are working on from the Overview tab, including techniques that have gone stale:
-  still being learned or drilled, and not trained for 30 days.
+  still being learned or drilled, and not trained for 30 days, not counting time off.
 
 ## Backups
 
@@ -89,7 +89,10 @@ day of it was.
 - **Weekly average and goal record:** weeks off are left out, whether or not you trained.
 - **Chart:** weeks off are shaded.
 
-Time off does not change what counts as a stale technique, your time in grade, or your mat time.
+- **Stale techniques:** the 30-day clock is paused on the days you were off, counted by the day
+  and not by the week. A technique flagged as stale says how many days off were left out.
+
+Time off does not change your time in grade or your mat time.
 
 ## Black belt degrees
 

@@ -1,4 +1,4 @@
-import { addDays, isIsoDate } from './dates';
+import { addDays, daysBetween, isIsoDate } from './dates';
 import { MAX_NOTES_LENGTH } from './sessions';
 import {
   newId,
@@ -101,4 +101,30 @@ export function isWeekOff(timeOff: TimeOff[], weekStart: string, today: string):
   return timeOff.some(
     (period) => period.startDate <= weekEnd && lastDay(period, today) >= weekStart,
   );
+}
+
+/**
+ * How many of the days from `from` to `to`, both included, were time off. Periods that overlap
+ * are not counted twice.
+ */
+export function daysOffBetween(timeOff: TimeOff[], from: string, to: string, today: string): number {
+  if (from > to) return 0;
+  // Each period, cut down to the range, in date order.
+  const spans = timeOff
+    .map((period) => ({
+      start: period.startDate > from ? period.startDate : from,
+      end: lastDay(period, today) < to ? lastDay(period, today) : to,
+    }))
+    .filter((span) => span.start <= span.end)
+    .sort((a, b) => a.start.localeCompare(b.start));
+
+  let days = 0;
+  let counted = ''; // The last day counted so far.
+  for (const span of spans) {
+    if (span.end <= counted) continue;
+    const start = counted !== '' && span.start <= counted ? addDays(counted, 1) : span.start;
+    days += daysBetween(start, span.end) + 1;
+    counted = span.end;
+  }
+  return days;
 }

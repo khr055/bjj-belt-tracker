@@ -1,10 +1,12 @@
 import { formatShortDate } from '../domain/dates';
-import { STALE_DAYS, techniqueFocus } from '../domain/techniques';
-import type { Session, Technique } from '../domain/types';
+import { formatUntrained, STALE_DAYS, techniqueFocus } from '../domain/techniques';
+import type { Session, Technique, TimeOff } from '../domain/types';
 
 interface Props {
   techniques: Technique[];
   sessions: Session[];
+  /** Days off do not count towards a technique going stale. */
+  timeOff: TimeOff[];
   today: string;
 }
 
@@ -17,8 +19,8 @@ function listed(names: string[]): string {
 }
 
 /** What is being worked on at the moment, and what has not been trained for a while. */
-export function TechniqueFocusCard({ techniques, sessions, today }: Props) {
-  const { counts, recent, stale } = techniqueFocus({ techniques, sessions }, today);
+export function TechniqueFocusCard({ techniques, sessions, timeOff, today }: Props) {
+  const { counts, recent, stale } = techniqueFocus({ techniques, sessions, timeOff }, today);
   const workingOn = counts.learning + counts.drilling;
 
   return (
@@ -54,14 +56,21 @@ export function TechniqueFocusCard({ techniques, sessions, today }: Props) {
             <div>
               <dt>Stale</dt>
               <dd>
-                {listed(stale.map(({ technique, days }) => `${technique.name} (${days} days)`))}
+                {listed(
+                  stale.map(
+                    ({ technique, ...wait }) => `${technique.name} (${formatUntrained(wait)})`,
+                  ),
+                )}
               </dd>
             </div>
           )}
         </dl>
       )}
       {stale.length > 0 && (
-        <p className="hint">Stale means not trained for {STALE_DAYS} days or more.</p>
+        <p className="hint">
+          Stale means not trained for {STALE_DAYS} days or more
+          {timeOff.length > 0 ? ', not counting time off.' : '.'}
+        </p>
       )}
       {workingOn > 0 && recent.length === 0 && stale.length === 0 && (
         <p className="muted">Tick a technique when you log a session to see it here.</p>
