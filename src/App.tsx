@@ -133,6 +133,7 @@ export default function App() {
             />
             <TimeOffCard
               timeOff={data.timeOff}
+              sessions={data.sessions}
               today={today}
               onAdd={actions.addTimeOff}
               onUpdate={actions.updateTimeOff}

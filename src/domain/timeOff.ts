@@ -5,6 +5,7 @@ import {
   TIME_OFF_REASONS,
   type AppData,
   type Result,
+  type Session,
   type TimeOff,
   type TimeOffReason,
 } from './types';
@@ -127,4 +128,22 @@ export function daysOffBetween(timeOff: TimeOff[], from: string, to: string, tod
     counted = span.end;
   }
   return days;
+}
+
+/**
+ * For time off with no last day: the first session logged after it began, and the day before
+ * that session, which is the natural last day off. Null when it has an end, or nothing has been
+ * logged since it began. A session on the first day itself does not count: training in the
+ * morning and getting hurt in the afternoon is not a return.
+ */
+export function returnedOn(
+  period: TimeOff,
+  sessions: Session[],
+): { firstSession: string; lastDayOff: string } | null {
+  if (period.endDate !== undefined) return null;
+  const firstSession = sessions
+    .map((session) => session.date)
+    .filter((date) => date > period.startDate)
+    .sort()[0];
+  return firstSession ? { firstSession, lastDayOff: addDays(firstSession, -1) } : null;
 }

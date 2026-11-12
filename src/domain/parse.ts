@@ -127,9 +127,10 @@ function toSession(value: unknown, techniques: Technique[]): Session | null {
 function toTimeOff(value: unknown): TimeOff | null {
   if (!isObject(value) || typeof value.id !== 'string' || !isIsoDate(value.startDate)) return null;
   if (!TIME_OFF_REASONS.includes(value.reason as TimeOffReason)) return null;
-  // A last day that cannot be right is dropped, which leaves the time off still going on.
-  const endDate =
-    isIsoDate(value.endDate) && value.endDate >= value.startDate ? value.endDate : undefined;
+  // A last day that cannot be right spoils the record: reading it as still going on would turn
+  // a period that ended into one that never does.
+  const endDate = value.endDate ?? undefined;
+  if (endDate !== undefined && !(isIsoDate(endDate) && endDate >= value.startDate)) return null;
   const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
   return {
     id: value.id,

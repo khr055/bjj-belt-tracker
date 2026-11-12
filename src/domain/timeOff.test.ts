@@ -7,6 +7,7 @@ import {
   isDayOff,
   isWeekOff,
   MAX_TIME_OFF,
+  returnedOn,
   sortTimeOff,
   updateTimeOff,
   type TimeOffInput,
@@ -136,5 +137,31 @@ describe('daysOffBetween', () => {
   it('runs time off with no last day up to today', () => {
     // 2 Nov to 11 Nov is ten days.
     expect(daysOffBetween([off('2026-11-02')], '2026-10-01', '2026-12-31', TODAY)).toBe(10);
+  });
+});
+
+describe('returnedOn', () => {
+  const on = (date: string) => ({ id: date, date, durationMinutes: 60, type: 'gi' as const });
+
+  it('finds the first session after open-ended time off began, and the day before it', () => {
+    const sessions = [on('2026-11-09'), on('2026-10-01'), on('2026-11-06')];
+    expect(returnedOn(off('2026-10-05'), sessions)).toEqual({
+      firstSession: '2026-11-06',
+      lastDayOff: '2026-11-05',
+    });
+  });
+
+  it('is null with nothing logged since, or when the time off has a last day', () => {
+    expect(returnedOn(off('2026-10-05'), [on('2026-10-01')])).toBeNull();
+    expect(returnedOn(off('2026-10-05', '2026-10-18'), [on('2026-11-06')])).toBeNull();
+  });
+
+  it('does not take a session on the first day off as a return', () => {
+    expect(returnedOn(off('2026-10-05'), [on('2026-10-05')])).toBeNull();
+    // The day after gives a single day off.
+    expect(returnedOn(off('2026-10-05'), [on('2026-10-06')])).toEqual({
+      firstSession: '2026-10-06',
+      lastDayOff: '2026-10-05',
+    });
   });
 });

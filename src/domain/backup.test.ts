@@ -242,9 +242,11 @@ describe('backup files', () => {
       ],
       timeOff: [
         { id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury' },
-        // A last day before the first is dropped, which leaves the time off still going on.
+        // A last day that cannot be right spoils the record: it is not read as still going on.
         { id: 'o2', startDate: '2026-09-10', endDate: '2026-09-01', reason: 'travel' },
-        { id: 'o3', startDate: '2026-09-20', reason: 'holiday' },
+        { id: 'o3', startDate: '2026-09-12', endDate: 5, reason: 'travel' },
+        { id: 'o4', startDate: '2026-09-20', reason: 'holiday' },
+        { id: 'o5', startDate: '2026-10-20', reason: 'illness' },
       ],
     };
     const result = readBackup(file({ version: 6, data }), TODAY);
@@ -257,9 +259,9 @@ describe('backup files', () => {
     ]);
     expect(result.value.data.timeOff).toEqual([
       { id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury' },
-      { id: 'o2', startDate: '2026-09-10', reason: 'travel' },
+      { id: 'o5', startDate: '2026-10-20', reason: 'illness' },
     ]);
-    expect(result.value.skipped).toBe(1);
+    expect(result.value.skipped).toBe(3);
   });
 
   it('saves backups in the current version', () => {

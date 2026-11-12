@@ -1,12 +1,25 @@
 import { useId, useState, type FormEvent } from 'react';
 import { formatDate } from '../domain/dates';
 import { MAX_NOTES_LENGTH } from '../domain/sessions';
-import { currentTimeOff, REASON_LABELS, sortTimeOff, type TimeOffInput } from '../domain/timeOff';
-import { TIME_OFF_REASONS, type TimeOff, type TimeOffReason } from '../domain/types';
+import {
+  currentTimeOff,
+  REASON_LABELS,
+  returnedOn,
+  sortTimeOff,
+  type TimeOffInput,
+} from '../domain/timeOff';
+import {
+  TIME_OFF_REASONS,
+  type Session,
+  type TimeOff,
+  type TimeOffReason,
+} from '../domain/types';
 import { ConfirmDelete } from './ConfirmDelete';
 
 interface Props {
   timeOff: TimeOff[];
+  /** To notice training logged during time off that was never ended. */
+  sessions: Session[];
   today: string;
   onAdd(input: TimeOffInput): string | null;
   onUpdate(id: string, input: TimeOffInput): string | null;
@@ -16,9 +29,14 @@ interface Props {
 type Mode = { kind: 'idle' } | { kind: 'add' } | { kind: 'edit'; id: string };
 const IDLE: Mode = { kind: 'idle' };
 
-/** "3 Nov 2026 to 17 Nov 2026", "3 Nov 2026" for a single day, or "Since 3 Nov 2026". */
-function describeDates(period: TimeOff): string {
-  if (period.endDate === undefined) return `Since ${formatDate(period.startDate)}`;
+/**
+ * "3 Nov 2026 to 17 Nov 2026", "3 Nov 2026" for a single day, "Since 3 Nov 2026" while it is
+ * going on, or "From 3 Nov 2026" when it has yet to start.
+ */
+function describeDates(period: TimeOff, today: string): string {
+  if (period.endDate === undefined) {
+    return `${period.startDate > today ? 'From' : 'Since'} ${formatDate(period.startDate)}`;
+  }
   if (period.endDate === period.startDate) return formatDate(period.startDate);
   return `${formatDate(period.startDate)} to ${formatDate(period.endDate)}`;
 }
@@ -115,9 +133,10 @@ function TimeOffForm({ initial, today, onSubmit, onCancel }: FormProps) {
   );
 }
 
-export function TimeOffCard({ timeOff, today, onAdd, onUpdate, onDelete }: Props) {
+export function TimeOffCard({ timeOff, sessions, today, onAdd, onUpdate, onDelete }: Props) {
   const [mode, setMode] = useState<Mode>(IDLE);
   const current = currentTimeOff(timeOff, today);
+  const back = current ? returnedOn(current, sessions) : null;
 
   const closeOnSuccess = (problem: string | null) => {
     if (!problem) setMode(IDLE);
@@ -147,11 +166,32 @@ export function TimeOffCard({ timeOff, today, onAdd, onUpdate, onDelete }: Props
         />
       )}
 
-      {current && (
+      {current && back === null && (
         <p className="notice">
           You are on time off ({REASON_LABELS[current.reason].toLowerCase()}). This week doesn't
           count against your streak or goal.
         </p>
+      )}
+
+      {current && back !== null && (
+        <div className="notice">
+          <p>
+            Your time off since {formatDate(current.startDate)} has no last day, but you trained on{' '}
+            {formatDate(back.firstSession)}. Until it is ended, every week counts as time off.
+          </p>
+          <div className="actions">
+            <button
+              type="button"
+              className="button button--small"
+              onClick={() => {
+                const { id: _id, ...period } = current;
+                onUpdate(current.id, { ...period, endDate: back.lastDayOff });
+              }}
+            >
+              End it on {formatDate(back.lastDayOff)}
+            </button>
+          </div>
+        </div>
       )}
 
       {timeOff.length === 0 && mode.kind !== 'add' && (
@@ -181,10 +221,14 @@ export function TimeOffCard({ timeOff, today, onAdd, onUpdate, onDelete }: Props
               <li key={period.id} className="list__item list__item--stacked">
                 <div className="list__row">
                   <div className="list__main">
-                    <strong>{describeDates(period)}</strong>
+                    <strong>{describeDates(period, today)}</strong>
                     <span className="muted">{REASON_LABELS[period.reason]}</span>
                   </div>
-                  {period.endDate === undefined && <span className="list__value">Ongoing</span>}
+                  {period.endDate === undefined && (
+                    <span className="list__value">
+                      {period.startDate > today ? 'Planned' : 'Ongoing'}
+                    </span>
+                  )}
                 </div>
                 {period.notes && <p className="list__detail list__notes">{period.notes}</p>}
                 <div className="actions actions--tight">

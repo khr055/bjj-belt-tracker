@@ -89,6 +89,10 @@ day of it was.
 - **Weekly average and goal record:** weeks off are left out, whether or not you trained.
 - **Chart:** weeks off are shaded.
 
+Time off can be entered ahead of time; it is shown as planned until it starts. If you log a
+session after open-ended time off began, the app points it out and offers to end the time off on
+the day before that session, since until it ends every week counts as off.
+
 - **Stale techniques:** the 30-day clock is paused on the days you were off, counted by the day
   and not by the week. A technique flagged as stale says how many days off were left out.
 
@@ -96,7 +100,8 @@ Time off does not change your time in grade or your mat time.
 
 ## Black belt degrees
 
-A black belt holds degrees in place of stripes, up to the 6th. Time in grade is measured from
+A black belt holds degrees in place of stripes, up to the 6th. Stripes do not carry over into
+degrees: choosing black belt starts at no degrees. Time in grade is measured from
 the day the current degree was awarded, against the IBJJF minimums: 3 years each before the 1st,
 2nd and 3rd degrees, and 5 years each before the 4th, 5th and 6th. Log the promotion to your
 current degree on the timeline to see it. The 7th degree and above (coral and red belts) are not

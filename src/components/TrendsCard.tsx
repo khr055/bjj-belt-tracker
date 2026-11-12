@@ -1,6 +1,7 @@
 import { formatShortDate } from '../domain/dates';
 import { goalProgress, goalRecord, MAX_WEEKLY_GOAL } from '../domain/goals';
 import { formatHours } from '../domain/sessions';
+import { currentTimeOff } from '../domain/timeOff';
 import {
   axisMax,
   TREND_WEEKS,
@@ -99,15 +100,20 @@ function GoalProgressTile({ sessions, timeOff, goal, today }: GoalTileProps) {
   );
 }
 
-/** What the streak needs next, or what is holding it. */
-function streakDetail(streak: WeeklyStreak): string {
+/**
+ * What the streak needs next, or what is holding it. A week with time off later in it, or
+ * earlier, is held without saying the practitioner is off today.
+ */
+function streakDetail(streak: WeeklyStreak, offToday: boolean): string {
   const carried =
     streak.weeksOff > 0 ? ` · Not counting ${count(streak.weeksOff, 'week')} off` : '';
   if (streak.weeks === 0) {
-    return streak.thisWeekOff ? 'On time off this week' : 'Train this week to start one';
+    if (!streak.thisWeekOff) return 'Train this week to start one';
+    return offToday ? 'On time off this week' : 'This week includes time off';
   }
   if (streak.thisWeekLogged) return `Including this week${carried}`;
-  return streak.thisWeekOff ? `Held while you are off${carried}` : `Train this week to keep it${carried}`;
+  if (!streak.thisWeekOff) return `Train this week to keep it${carried}`;
+  return `${offToday ? 'Held while you are off' : 'Held: this week includes time off'}${carried}`;
 }
 
 export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: Props) {
@@ -125,6 +131,9 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
   const streak = weeklyStreak(sessions, today, timeOff);
   const average = weeklyAverage(sessions, today, TREND_WEEKS, timeOff);
   const weeksOff = weeks.filter((week) => week.off).length;
+  const offToday = currentTimeOff(timeOff, today) !== null;
+  // With no average, tell having no full week yet from having only weeks with time off.
+  const onlyWeeksOff = average === null && weeklyAverage(sessions, today) !== null;
   const max = axisMax([...weeks.map((week) => week.sessions), weeklyGoal ?? 0]);
   const ticks = [max, max / 2, 0];
 
@@ -139,7 +148,7 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
             <span className="stat__number">{streak.weeks}</span>{' '}
             {streak.weeks === 1 ? 'week' : 'weeks'}
           </p>
-          <p className="muted">{streakDetail(streak)}</p>
+          <p className="muted">{streakDetail(streak, offToday)}</p>
         </div>
         <div className="stat" role="group" aria-label="Weekly average">
           <p className="eyebrow">Weekly average</p>
@@ -150,7 +159,9 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
           <p className="muted">
             {average
               ? `Over the last ${count(average.weeks, 'full week')}`
-              : 'After your first full week'}
+              : onlyWeeksOff
+                ? 'After your next full week without time off'
+                : 'After your first full week'}
           </p>
         </div>
       </div>

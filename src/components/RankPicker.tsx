@@ -24,9 +24,13 @@ export function RankPicker({ value, onChange }: Props) {
                 type="radio"
                 name={`${name}-belt`}
                 checked={value.belt === belt}
-                // Stripes a new belt cannot hold are brought down to the most it can.
+                // Stripes carry over between coloured belts, but stripes are not degrees: moving
+                // to or from black belt starts the count again.
                 onChange={() =>
-                  onChange({ belt, stripes: Math.min(value.stripes, maxStripes(belt)) })
+                  onChange({
+                    belt,
+                    stripes: (belt === 'black') === black ? value.stripes : 0,
+                  })
                 }
               />
               <span className={`chip__swatch chip__swatch--${belt}`} aria-hidden="true" />

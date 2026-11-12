@@ -988,6 +988,29 @@ describe('Wins by a technique from the journal', () => {
     );
   });
 
+  it('keeps the technique as words when a linked win is changed to a loss', async () => {
+    seed({
+      techniques: [TRIANGLE],
+      competitions: [
+        { ...OPEN, matches: [{ id: 'm1', result: 'win', method: 'submission', techniqueId: 't1' }] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    await user.click(screen.getByRole('button', { name: 'Edit match 1 at Autumn Open' }));
+    const form = screen.getByRole('form', { name: 'Edit match' });
+    await user.click(within(form).getByRole('radio', { name: 'Loss' }));
+    expect(within(form).getByRole('textbox', { name: /Submission/ })).toHaveValue('Triangle');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().competitions[0].matches[0]).toEqual({
+      id: 'm1',
+      result: 'loss',
+      method: 'submission',
+      submission: 'Triangle',
+    });
+  });
+
   it('types the submission in when the journal is empty', async () => {
     seed({ competitions: [{ ...OPEN, matches: [] }] });
     const user = userEvent.setup();
@@ -1109,6 +1132,66 @@ describe('Time off', () => {
   });
 });
 
+describe('Time off that is planned, or was never ended', () => {
+  it('holds the streak for time off later this week without saying you are off today', async () => {
+    const today = todayIso();
+    const thisWeek = weekStart(today);
+    // Time off that starts on the last day of this week, or after today if that is today.
+    const starts = addDays(thisWeek, 6) > today ? addDays(thisWeek, 6) : addDays(today, 1);
+    seed({
+      sessions: [{ id: 's1', date: addDays(thisWeek, -7), durationMinutes: 60, type: 'gi' }],
+      timeOff: [{ id: 'o1', startDate: starts, reason: 'travel' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const card = screen.getByRole('region', { name: 'Time off' });
+    expect(card).toHaveTextContent(`From ${formatDate(starts)}`);
+    expect(card).toHaveTextContent('Planned');
+    expect(card).not.toHaveTextContent('You are on time off');
+    const streak = screen.getByRole('group', { name: 'Current streak' });
+    expect(streak).not.toHaveTextContent('while you are off');
+    // Sunday is the one day on which "later this week" is next week.
+    if (starts <= addDays(thisWeek, 6)) {
+      expect(streak).toHaveTextContent('Held: this week includes time off');
+    }
+  });
+
+  it('offers to end open time off once a session has been logged since it began', async () => {
+    const today = todayIso();
+    seed({
+      sessions: [
+        { id: 's1', date: addDays(today, -100), durationMinutes: 60, type: 'gi' },
+        { id: 's2', date: addDays(today, -20), durationMinutes: 60, type: 'gi' },
+        { id: 's3', date: addDays(today, -6), durationMinutes: 60, type: 'gi' },
+      ],
+      timeOff: [{ id: 'o1', startDate: addDays(today, -90), reason: 'injury', notes: 'Knee' }],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    // Every finished week counts as off, which is said, not passed off as being new to the app.
+    const average = screen.getByRole('group', { name: 'Weekly average' });
+    expect(average).toHaveTextContent('After your next full week without time off');
+
+    const card = screen.getByRole('region', { name: 'Time off' });
+    expect(card).toHaveTextContent(
+      `has no last day, but you trained on ${formatDate(addDays(today, -20))}`,
+    );
+    const lastDay = addDays(today, -21);
+    await user.click(within(card).getByRole('button', { name: `End it on ${formatDate(lastDay)}` }));
+
+    expect(stored().timeOff).toEqual([
+      { id: 'o1', startDate: addDays(today, -90), endDate: lastDay, reason: 'injury', notes: 'Knee' },
+    ]);
+    expect(card).not.toHaveTextContent('has no last day');
+    expect(card).toHaveTextContent(`${formatDate(addDays(today, -90))} to ${formatDate(lastDay)}`);
+    expect(average).toHaveTextContent(/Over the last \d full weeks?/);
+  });
+});
+
 describe('Stale techniques and time off', () => {
   it('pauses the stale clock during time off, on the overview and in the journal', async () => {
     const today = todayIso();
@@ -1172,10 +1255,15 @@ describe('Black belt degrees', () => {
     const degrees = screen.getByRole('group', { name: 'Degrees' });
     expect(within(degrees).getAllByRole('radio')).toHaveLength(7);
     await user.click(within(degrees).getByRole('radio', { name: '5 degrees' }));
-    // Going back to a coloured belt brings the count down to what it can hold.
+    // Degrees are not stripes: going back to a coloured belt starts the count again.
     await user.click(screen.getByRole('radio', { name: 'Brown' }));
-    expect(screen.getByRole('radio', { name: '4 stripes' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: '0 stripes' })).toBeChecked();
+    // Stripes carry over between coloured belts, but not into black belt degrees.
+    await user.click(screen.getByRole('radio', { name: '3 stripes' }));
+    await user.click(screen.getByRole('radio', { name: 'Purple' }));
+    expect(screen.getByRole('radio', { name: '3 stripes' })).toBeChecked();
     await user.click(screen.getByRole('radio', { name: 'Black' }));
+    expect(screen.getByRole('radio', { name: '0 degrees' })).toBeChecked();
     await user.click(screen.getByRole('radio', { name: '5 degrees' }));
     await user.click(screen.getByRole('button', { name: 'Save rank' }));
 
@@ -1221,6 +1309,21 @@ describe('Black belt degrees', () => {
     expect(screen.getByRole('region', { name: 'Time in grade' })).toHaveTextContent(
       "The 7th degree is the coral belt, which this app doesn't track.",
     );
+  });
+
+  it('logs a black belt, not a degree, when a brown belt with stripes is promoted', async () => {
+    seed({ rank: { belt: 'brown', stripes: 2 } });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Timeline' }));
+    await user.click(screen.getByRole('button', { name: 'Log promotion' }));
+    const form = screen.getByRole('form', { name: 'Log promotion' });
+    // The undated current rank is suggested; choosing black must not make it a 2nd degree.
+    expect(within(form).getByRole('radio', { name: '2 stripes' })).toBeChecked();
+    await user.click(within(form).getByRole('radio', { name: 'Black' }));
+    await user.click(within(form).getByRole('button', { name: 'Save promotion' }));
+    expect(stored().rank).toEqual({ belt: 'black', stripes: 0 });
+    expect(stored().promotions[0]).toMatchObject({ belt: 'black', stripes: 0 });
   });
 
   it('logs a degree on the timeline', async () => {
