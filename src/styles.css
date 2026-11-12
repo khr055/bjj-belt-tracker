@@ -523,6 +523,29 @@ input[type='file'] {
   border-top: 1px solid var(--border);
 }
 
+/* Sessions listed under a technique */
+.history {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.9rem;
+}
+
+.history ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history li {
+  display: grid;
+}
+
 /* Filters above a list */
 .filters {
   display: grid;

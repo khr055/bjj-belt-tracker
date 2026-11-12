@@ -40,8 +40,9 @@ Restoring shows what the file contains and what it will replace before anything 
 replaces the data on the device; it does not merge. Files that are not backups, come from a
 newer version of the app, or contain an out-of-order promotion history are refused.
 
-Backups are saved as format version 3. Version 2 added session notes, the weekly goal and
-competitions; version 3 added techniques. Older files still restore.
+Backups are saved as format version 4. Version 2 added session notes, the weekly goal and
+competitions; version 3 added techniques; version 4 added the day each technique reached its
+stage. Older files still restore.
 
 ## Techniques
 
@@ -49,6 +50,12 @@ The list is yours: the app ships no curriculum, so add the techniques your schoo
 Names must be unique. Deleting a technique takes it off the sessions it was ticked on and leaves
 the sessions in place. A technique that has never been ticked counts as untrained from the day
 it was added.
+
+Each technique shows the day it reached its current stage. A button moves it to the next stage
+in one tap, dated that day; editing it to a different stage does the same. Once a technique is
+landing in rolling, it also shows how many sessions it had been trained in by then. Techniques
+saved before stages were dated count from the day they were added. The Sessions button on a
+technique lists the sessions it was ticked on, newest first.
 
 ## Offline and updates
 

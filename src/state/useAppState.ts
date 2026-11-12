@@ -21,10 +21,11 @@ import { addSession, deleteSession, updateSession, type SessionInput } from '../
 import {
   addTechnique,
   deleteTechnique,
+  setTechniqueStatus,
   updateTechnique,
   type TechniqueInput,
 } from '../domain/techniques';
-import type { AppData, Rank, Result } from '../domain/types';
+import type { AppData, Rank, Result, TechniqueStatus } from '../domain/types';
 import { loadData, saveData } from './storage';
 
 /** Each action returns an error message, or null when the change was applied. */
@@ -45,7 +46,8 @@ export interface AppActions {
   updateMatch(competitionId: string, matchId: string, input: MatchInput): string | null;
   deleteMatch(competitionId: string, matchId: string): void;
   addTechnique(input: TechniqueInput, today: string): string | null;
-  updateTechnique(id: string, input: TechniqueInput): string | null;
+  updateTechnique(id: string, input: TechniqueInput, today: string): string | null;
+  setTechniqueStatus(id: string, status: TechniqueStatus, today: string): string | null;
   /** Also takes the technique off the sessions it was ticked on. */
   deleteTechnique(id: string): void;
   /** Swaps in a whole data set, e.g. from a backup file. */
@@ -84,7 +86,8 @@ export function useAppState(): { data: AppData; saveFailed: boolean; actions: Ap
       apply(updateMatch(data, competitionId, matchId, input)),
     deleteMatch: (competitionId, matchId) => commit(deleteMatch(data, competitionId, matchId)),
     addTechnique: (input, today) => apply(addTechnique(data, input, today)),
-    updateTechnique: (id, input) => apply(updateTechnique(data, id, input)),
+    updateTechnique: (id, input, today) => apply(updateTechnique(data, id, input, today)),
+    setTechniqueStatus: (id, status, today) => apply(setTechniqueStatus(data, id, status, today)),
     deleteTechnique: (id) => commit(deleteTechnique(data, id)),
     replaceData: commit,
   };

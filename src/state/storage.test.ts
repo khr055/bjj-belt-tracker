@@ -41,7 +41,7 @@ describe('storage', () => {
         },
       ],
       techniques: [
-        { id: 't1', name: 'Heel hook', position: 'legs', status: 'learning', addedOn: '2024-01-15' },
+        { id: 't1', name: 'Heel hook', position: 'legs', status: 'learning', addedOn: '2024-01-15', statusSince: '2024-01-20' },
       ],
     };
     expect(saveData(data)).toBe(true);
@@ -166,8 +166,22 @@ describe('storage', () => {
       ],
     });
     expect(report.data.techniques).toEqual([
-      { id: 't1', name: 'Armbar', position: 'guard', status: 'drilling', addedOn: '2024-01-01' },
-      { id: 't6', name: 'Kimura', position: 'guard', status: 'learning', addedOn: '2024-01-02' },
+      {
+        id: 't1',
+        name: 'Armbar',
+        position: 'guard',
+        status: 'drilling',
+        addedOn: '2024-01-01',
+        statusSince: '2024-01-01',
+      },
+      {
+        id: 't6',
+        name: 'Kimura',
+        position: 'guard',
+        status: 'learning',
+        addedOn: '2024-01-02',
+        statusSince: '2024-01-02',
+      },
     ]);
     expect(report.data.sessions).toEqual([
       { id: 's1', date: '2024-02-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t6', 't1'] },

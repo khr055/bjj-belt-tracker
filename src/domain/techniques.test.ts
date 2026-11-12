@@ -3,6 +3,10 @@ import { addSession, filterSessions, sessionTechniques, updateSession } from './
 import {
   activityOf,
   addTechnique,
+  nextStatus,
+  sessionsFor,
+  sessionsToLand,
+  setTechniqueStatus,
   daysUntrained,
   deleteTechnique,
   groupByPosition,
@@ -34,6 +38,7 @@ function technique(overrides: Partial<Technique> & Pick<Technique, 'id'>): Techn
     position: 'guard',
     status: 'drilling',
     addedOn: '2026-01-01',
+    statusSince: '2026-01-01',
     ...overrides,
   };
 }
@@ -52,6 +57,7 @@ describe('the technique list', () => {
       position: 'passing',
       status: 'drilling',
       addedOn: TODAY,
+      statusSince: TODAY,
     });
   });
 
@@ -87,7 +93,7 @@ describe('the technique list', () => {
     data = mustAdd(data, ARMBAR);
     const { id } = data.techniques[0];
 
-    const moved = updateTechnique(data, id, { ...KNEE_CUT, status: 'landing', notes: 'Works' });
+    const moved = updateTechnique(data, id, { ...KNEE_CUT, status: 'landing', notes: 'Works' }, TODAY);
     expect(moved.ok && moved.value.techniques[0]).toEqual({
       id,
       name: 'Knee cut pass',
@@ -95,15 +101,41 @@ describe('the technique list', () => {
       status: 'landing',
       notes: 'Works',
       addedOn: '2026-10-01',
+      statusSince: TODAY,
+    });
+
+    // An edit that leaves the stage alone leaves its date alone too.
+    const renamed = updateTechnique(data, id, { ...KNEE_CUT, name: 'Knee slice' }, TODAY);
+    expect(renamed.ok && renamed.value.techniques[0]).toMatchObject({
+      name: 'Knee slice',
+      statusSince: '2026-10-01',
     });
 
     // Its own name is not a clash; another technique's is.
-    expect(updateTechnique(data, id, { ...KNEE_CUT, name: 'knee cut pass' }).ok).toBe(true);
-    const clash = updateTechnique(data, id, { ...KNEE_CUT, name: 'armbar' });
+    expect(updateTechnique(data, id, { ...KNEE_CUT, name: 'knee cut pass' }, TODAY).ok).toBe(true);
+    const clash = updateTechnique(data, id, { ...KNEE_CUT, name: 'armbar' }, TODAY);
     expect(!clash.ok && clash.error).toContain('already have a technique called Armbar');
 
-    const missing = updateTechnique(data, 'gone', KNEE_CUT);
+    const missing = updateTechnique(data, 'gone', KNEE_CUT, TODAY);
     expect(!missing.ok && missing.error).toBe('That technique no longer exists.');
+  });
+
+  it('moves a technique to the next stage and dates the move', () => {
+    expect(nextStatus('learning')).toBe('drilling');
+    expect(nextStatus('drilling')).toBe('landing');
+    expect(nextStatus('landing')).toBeNull();
+
+    const data = mustAdd(emptyData(), ARMBAR, '2026-10-01');
+    const { id } = data.techniques[0];
+    const moved = setTechniqueStatus(data, id, 'drilling', TODAY);
+    expect(moved.ok && moved.value.techniques[0]).toMatchObject({
+      status: 'drilling',
+      addedOn: '2026-10-01',
+      statusSince: TODAY,
+    });
+    // Setting the stage it already has changes nothing.
+    expect(setTechniqueStatus(data, id, 'learning', TODAY)).toEqual({ ok: true, value: data });
+    expect(setTechniqueStatus(data, 'gone', 'drilling', TODAY).ok).toBe(false);
   });
 
   it('sorts by name and groups by position in the usual order', () => {
@@ -246,6 +278,30 @@ describe('how often and how recently a technique is trained', () => {
     expect(isStale(drilling, on('2026-10-12'), TODAY)).toBe(true);
     expect(isStale(technique({ id: 'x', status: 'learning' }), on('2026-10-12'), TODAY)).toBe(true);
     expect(isStale(technique({ id: 'x', status: 'landing' }), on('2026-01-01'), TODAY)).toBe(false);
+  });
+});
+
+describe('a technique\'s history', () => {
+  const sessions = [
+    session('s1', '2026-10-01', ['a']),
+    session('s2', '2026-11-05', ['a', 'b']),
+    session('s3', '2026-10-20', ['a']),
+    session('s4', '2026-11-09', ['b']),
+  ];
+
+  it('lists the sessions it was trained in, newest first', () => {
+    expect(sessionsFor(technique({ id: 'a' }), sessions).map((s) => s.id)).toEqual([
+      's2',
+      's3',
+      's1',
+    ]);
+    expect(sessionsFor(technique({ id: 'never' }), sessions)).toEqual([]);
+  });
+
+  it('counts the sessions it took to start landing in rolling', () => {
+    const landed = technique({ id: 'a', status: 'landing', statusSince: '2026-10-20' });
+    expect(sessionsToLand(landed, sessions)).toBe(2);
+    expect(sessionsToLand(technique({ id: 'a', status: 'drilling' }), sessions)).toBeNull();
   });
 });
 

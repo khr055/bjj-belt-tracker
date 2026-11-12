@@ -52,8 +52,16 @@ const DATA: AppData = {
       status: 'drilling',
       notes: 'Frame first',
       addedOn: '2026-10-20',
+      statusSince: '2026-11-02',
     },
-    { id: 't2', name: 'Triangle', position: 'guard', status: 'landing', addedOn: '2026-09-01' },
+    {
+      id: 't2',
+      name: 'Triangle',
+      position: 'guard',
+      status: 'landing',
+      addedOn: '2026-09-01',
+      statusSince: '2026-09-01',
+    },
   ],
 };
 
@@ -160,6 +168,15 @@ describe('backup files', () => {
     const sessions = [{ id: 's1', date: '2026-11-01', durationMinutes: 90, type: 'nogi' }];
     const result = readBackup(file({ version: 2, data: { ...old, sessions } }), TODAY);
     expect(result.ok && result.value.data).toEqual({ ...old, sessions, techniques: [] });
+    expect(result.ok && result.value.skipped).toBe(0);
+  });
+
+  it('restores a version 3 backup, made before stages were dated', () => {
+    const techniques = DATA.techniques.map(({ statusSince: _statusSince, ...old }) => old);
+    const result = readBackup(file({ version: 3, data: { ...DATA, techniques } }), TODAY);
+    expect(result.ok && result.value.data.techniques).toEqual(
+      DATA.techniques.map((technique) => ({ ...technique, statusSince: technique.addedOn })),
+    );
     expect(result.ok && result.value.skipped).toBe(0);
   });
 

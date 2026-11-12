@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { formatDate } from '../domain/dates';
+import { SESSION_TYPE_LABELS } from '../domain/sessions';
 import {
   activityOf,
   daysUntrained,
   groupByPosition,
   isStale,
+  nextStatus,
   POSITION_LABELS,
+  sessionsFor,
+  sessionsToLand,
   STATUS_LABELS,
   statusCounts,
   techniqueActivity,
@@ -27,6 +31,7 @@ interface Props {
   today: string;
   onAdd(input: TechniqueInput): string | null;
   onUpdate(id: string, input: TechniqueInput): string | null;
+  onSetStatus(id: string, status: TechniqueStatus): string | null;
   onDelete(id: string): void;
 }
 
@@ -34,17 +39,75 @@ type Mode = { kind: 'idle' } | { kind: 'add' } | { kind: 'edit'; id: string };
 const IDLE: Mode = { kind: 'idle' };
 const NO_BREAK_SPACE = String.fromCharCode(160);
 
+/** Sessions shown in a technique's history before the rest are asked for. */
+const HISTORY_SIZE = 10;
+
+/** A date that stays on one line when the sentence around it wraps. */
+function solidDate(date: string): string {
+  return formatDate(date).replaceAll(' ', NO_BREAK_SPACE);
+}
+
+function count(amount: number, noun: string): string {
+  return `${amount} ${noun}${amount === 1 ? '' : 's'}`;
+}
+
+/** "Drilling since 3 Oct 2026", adding how many sessions it took once it is landing. */
+function describeStage(technique: Technique, sessions: Session[]): string {
+  const stage = `${STATUS_LABELS[technique.status]} since ${solidDate(technique.statusSince)}`;
+  const taken = sessionsToLand(technique, sessions);
+  return taken ? `${stage} · after ${count(taken, 'session')}` : stage;
+}
+
 /** "Trained in 4 sessions · last on 3 Nov 2026", or that it has not been trained yet. */
 function describeActivity({ sessions, lastTrained }: TechniqueActivity): string {
   if (sessions === 0 || lastTrained === null) return 'Not ticked on a session yet';
-  // The date stays on one line when the sentence wraps.
-  const date = formatDate(lastTrained).replaceAll(' ', NO_BREAK_SPACE);
-  return `Trained in ${sessions} ${sessions === 1 ? 'session' : 'sessions'} · last on ${date}`;
+  return `Trained in ${count(sessions, 'session')} · last on ${solidDate(lastTrained)}`;
 }
 
-export function TechniquesView({ techniques, sessions, today, onAdd, onUpdate, onDelete }: Props) {
+interface HistoryProps {
+  name: string;
+  sessions: Session[];
+}
+
+function History({ name, sessions }: HistoryProps) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? sessions : sessions.slice(0, HISTORY_SIZE);
+  return (
+    <div className="history">
+      <ol aria-label={`Sessions for ${name}`}>
+        {shown.map((session) => (
+          <li key={session.id}>
+            <span>
+              {formatDate(session.date)} · {SESSION_TYPE_LABELS[session.type]} ·{' '}
+              {session.durationMinutes} min
+            </span>
+            {session.notes && <span className="muted list__detail">{session.notes}</span>}
+          </li>
+        ))}
+      </ol>
+      {sessions.length > shown.length && (
+        <div className="actions">
+          <button type="button" className="button button--small" onClick={() => setShowAll(true)}>
+            Show all {sessions.length}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TechniquesView({
+  techniques,
+  sessions,
+  today,
+  onAdd,
+  onUpdate,
+  onSetStatus,
+  onDelete,
+}: Props) {
   const [mode, setMode] = useState<Mode>(IDLE);
   const [status, setStatus] = useState<TechniqueStatus | 'all'>('all');
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const activity = techniqueActivity(sessions);
   const counts = statusCounts(techniques);
   const shown = techniques.filter((technique) => status === 'all' || technique.status === status);
@@ -78,13 +141,14 @@ export function TechniquesView({ techniques, sessions, today, onAdd, onUpdate, o
       );
     }
     const own = activityOf(activity, technique);
+    const next = nextStatus(technique.status);
+    const historyOpen = historyId === id;
     return (
       <li key={id} className="list__item list__item--stacked">
         <div className="list__main">
           <strong className="list__detail">{name}</strong>
-          <span className="muted list__detail">
-            {STATUS_LABELS[technique.status]} · {describeActivity(own)}
-          </span>
+          <span className="muted list__detail">{describeStage(technique, sessions)}</span>
+          <span className="muted list__detail">{describeActivity(own)}</span>
           {isStale(technique, own, today) && (
             <span className="list__tally">
               Not trained for {daysUntrained(technique, own, today)} days
@@ -93,6 +157,27 @@ export function TechniquesView({ techniques, sessions, today, onAdd, onUpdate, o
         </div>
         {technique.notes && <p className="list__detail list__notes">{technique.notes}</p>}
         <div className="actions actions--tight">
+          {next && (
+            <button
+              type="button"
+              className="button button--small"
+              aria-label={`Move ${name} to ${STATUS_LABELS[next].toLowerCase()}`}
+              onClick={() => onSetStatus(id, next)}
+            >
+              Move to {STATUS_LABELS[next].toLowerCase()}
+            </button>
+          )}
+          {own.sessions > 0 && (
+            <button
+              type="button"
+              className="button button--small"
+              aria-label={`Sessions for ${name}`}
+              aria-expanded={historyOpen}
+              onClick={() => setHistoryId(historyOpen ? null : id)}
+            >
+              {historyOpen ? 'Hide sessions' : 'Sessions'}
+            </button>
+          )}
           <button
             type="button"
             className="button button--small"
@@ -103,6 +188,7 @@ export function TechniquesView({ techniques, sessions, today, onAdd, onUpdate, o
           </button>
           <ConfirmDelete label={name} onConfirm={() => onDelete(id)} />
         </div>
+        {historyOpen && <History name={name} sessions={sessionsFor(technique, sessions)} />}
       </li>
     );
   };

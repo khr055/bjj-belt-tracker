@@ -1,5 +1,5 @@
 import { daysBetween, isIsoDate } from './dates';
-import { MAX_NOTES_LENGTH } from './sessions';
+import { MAX_NOTES_LENGTH, sortSessions } from './sessions';
 import {
   newId,
   POSITIONS,
@@ -12,7 +12,7 @@ import {
   type TechniqueStatus,
 } from './types';
 
-export type TechniqueInput = Omit<Technique, 'id' | 'addedOn'>;
+export type TechniqueInput = Omit<Technique, 'id' | 'addedOn' | 'statusSince'>;
 
 export const MAX_TECHNIQUE_NAME_LENGTH = 60;
 export const MAX_TECHNIQUES = 300;
@@ -75,12 +75,25 @@ export function addTechnique(data: AppData, input: TechniqueInput, today: string
   if (data.techniques.length >= MAX_TECHNIQUES) {
     return { ok: false, error: `The journal can hold up to ${MAX_TECHNIQUES} techniques.` };
   }
-  const technique: Technique = { id: newId(), ...clean(input), addedOn: today };
+  const technique: Technique = {
+    id: newId(),
+    ...clean(input),
+    addedOn: today,
+    statusSince: today,
+  };
   return { ok: true, value: { ...data, techniques: [...data.techniques, technique] } };
 }
 
-/** Editing a technique keeps the day it was added and its place in past sessions. */
-export function updateTechnique(data: AppData, id: string, input: TechniqueInput): Result<AppData> {
+/**
+ * Editing a technique keeps the day it was added and its place in past sessions. A change of
+ * stage is dated today; any other edit leaves the stage's date alone.
+ */
+export function updateTechnique(
+  data: AppData,
+  id: string,
+  input: TechniqueInput,
+  today: string,
+): Result<AppData> {
   const existing = data.techniques.find((technique) => technique.id === id);
   if (!existing) return { ok: false, error: 'That technique no longer exists.' };
   const error = validateTechnique(
@@ -93,10 +106,62 @@ export function updateTechnique(data: AppData, id: string, input: TechniqueInput
     value: {
       ...data,
       techniques: data.techniques.map((technique) =>
-        technique.id === id ? { id, ...clean(input), addedOn: existing.addedOn } : technique,
+        technique.id === id
+          ? {
+              id,
+              ...clean(input),
+              addedOn: existing.addedOn,
+              statusSince: input.status === existing.status ? existing.statusSince : today,
+            }
+          : technique,
       ),
     },
   };
+}
+
+/** The stage a technique moves to next, or null once it is landing in rolling. */
+export function nextStatus(status: TechniqueStatus): TechniqueStatus | null {
+  return TECHNIQUE_STATUSES[TECHNIQUE_STATUSES.indexOf(status) + 1] ?? null;
+}
+
+/** Moves a technique to another stage, dated today. */
+export function setTechniqueStatus(
+  data: AppData,
+  id: string,
+  status: TechniqueStatus,
+  today: string,
+): Result<AppData> {
+  const existing = data.techniques.find((technique) => technique.id === id);
+  if (!existing) return { ok: false, error: 'That technique no longer exists.' };
+  if (!TECHNIQUE_STATUSES.includes(status)) {
+    return { ok: false, error: 'Choose how far along you are.' };
+  }
+  if (status === existing.status) return { ok: true, value: data };
+  return {
+    ok: true,
+    value: {
+      ...data,
+      techniques: data.techniques.map((technique) =>
+        technique.id === id ? { ...technique, status, statusSince: today } : technique,
+      ),
+    },
+  };
+}
+
+/** The sessions a technique was ticked on, newest first. */
+export function sessionsFor(technique: Technique, sessions: Session[]): Session[] {
+  return sortSessions(sessions.filter((session) => session.techniqueIds?.includes(technique.id)));
+}
+
+/**
+ * Sessions the technique was trained in up to the day it started landing in rolling, or null
+ * if it is not there yet.
+ */
+export function sessionsToLand(technique: Technique, sessions: Session[]): number | null {
+  if (technique.status !== 'landing') return null;
+  return sessionsFor(technique, sessions).filter(
+    (session) => session.date <= technique.statusSince,
+  ).length;
 }
 
 /** Deleting a technique also takes it off the sessions it was ticked on. The sessions stay. */

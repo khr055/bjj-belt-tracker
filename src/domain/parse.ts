@@ -74,6 +74,8 @@ function toTechnique(value: unknown): Technique | null {
     status: value.status as TechniqueStatus,
     ...(notes ? { notes } : {}),
     addedOn: value.addedOn,
+    // Techniques saved before stages were dated count from the day they were added.
+    statusSince: isIsoDate(value.statusSince) ? value.statusSince : value.addedOn,
   };
 }
 

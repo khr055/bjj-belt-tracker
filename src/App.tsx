@@ -147,7 +147,8 @@ export default function App() {
             sessions={data.sessions}
             today={today}
             onAdd={(input) => actions.addTechnique(input, today)}
-            onUpdate={actions.updateTechnique}
+            onUpdate={(id, input) => actions.updateTechnique(id, input, today)}
+            onSetStatus={(id, status) => actions.setTechniqueStatus(id, status, today)}
             onDelete={actions.deleteTechnique}
           />
         )}

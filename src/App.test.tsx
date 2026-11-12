@@ -451,14 +451,14 @@ describe('Technique journal', () => {
     name: 'Knee cut pass',
     position: 'passing',
     status: 'drilling',
-    addedOn: '2024-01-01',
+    addedOn: '2024-01-01', statusSince: '2024-01-01',
   };
   const TRIANGLE: Technique = {
     id: 't2',
     name: 'Triangle',
     position: 'guard',
     status: 'landing',
-    addedOn: '2024-01-01',
+    addedOn: '2024-01-01', statusSince: '2024-01-01',
   };
 
   it('adds techniques, grouped by position, and filters them by stage', async () => {
@@ -505,7 +505,8 @@ describe('Technique journal', () => {
 
     const passing = screen.getByRole('list', { name: 'Guard passing' });
     expect(passing).toHaveTextContent('Knee cut pass');
-    expect(passing).toHaveTextContent('Learning · Not ticked on a session yet');
+    expect(passing).toHaveTextContent(`Learning since ${formatDate(todayIso())}`);
+    expect(passing).toHaveTextContent('Not ticked on a session yet');
     expect(passing).toHaveTextContent('Head on the far side');
     expect(screen.getByRole('list', { name: 'Guard' })).toHaveTextContent('Triangle');
 
@@ -550,7 +551,7 @@ describe('Technique journal', () => {
 
     await user.click(screen.getByRole('button', { name: 'Techniques' }));
     expect(screen.getByRole('list', { name: 'Guard passing' })).toHaveTextContent(
-      `Drilling · Trained in 1 session · last on ${formatDate(todayIso())}`,
+      `Trained in 1 session · last on ${formatDate(todayIso())}`,
     );
   });
 
@@ -590,7 +591,11 @@ describe('Technique journal', () => {
     expect(within(form).getByRole('radio', { name: 'Guard passing' })).toBeChecked();
     await user.click(within(form).getByRole('radio', { name: 'Landing in rolling' }));
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));
-    expect(stored().techniques[0]).toEqual({ ...KNEE_CUT, status: 'landing' });
+    expect(stored().techniques[0]).toEqual({
+      ...KNEE_CUT,
+      status: 'landing',
+      statusSince: todayIso(),
+    });
 
     await user.click(screen.getByRole('button', { name: 'Delete Knee cut pass' }));
     await user.click(screen.getByRole('button', { name: 'Confirm delete Knee cut pass' }));
@@ -600,13 +605,78 @@ describe('Technique journal', () => {
     ]);
   });
 
+  it('moves a technique to the next stage in one tap and dates the move', async () => {
+    seed({
+      techniques: [{ ...KNEE_CUT, status: 'learning' }],
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+        { id: 's2', date: '2024-05-08', durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+
+    const list = screen.getByRole('list', { name: 'Guard passing' });
+    expect(list).toHaveTextContent('Learning since 1 Jan 2024');
+    await user.click(screen.getByRole('button', { name: 'Move Knee cut pass to drilling' }));
+    expect(list).toHaveTextContent(`Drilling since ${formatDate(todayIso())}`);
+    expect(stored().techniques[0]).toMatchObject({ status: 'drilling', statusSince: todayIso() });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Move Knee cut pass to landing in rolling' }),
+    );
+    expect(list).toHaveTextContent(
+      `Landing in rolling since ${formatDate(todayIso())} · after 2 sessions`,
+    );
+    // There is no stage beyond landing in rolling.
+    expect(screen.queryByRole('button', { name: /^Move Knee cut pass/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the sessions a technique was trained in', async () => {
+    seed({
+      techniques: [KNEE_CUT, TRIANGLE],
+      sessions: [
+        { id: 's1', date: '2024-05-01', durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
+        {
+          id: 's2',
+          date: '2024-05-08',
+          durationMinutes: 90,
+          type: 'nogi',
+          techniqueIds: ['t1'],
+          notes: 'Finished from headquarters',
+        },
+        { id: 's3', date: '2024-05-09', durationMinutes: 60, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Techniques' }));
+
+    const toggle = screen.getByRole('button', { name: 'Sessions for Knee cut pass' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const history = screen.getByRole('list', { name: 'Sessions for Knee cut pass' });
+    const rows = within(history).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('8 May 2024 · No-gi · 90 min');
+    expect(rows[0]).toHaveTextContent('Finished from headquarters');
+    expect(rows[1]).toHaveTextContent('1 May 2024 · Gi · 60 min');
+
+    await user.click(toggle);
+    expect(screen.queryByRole('list', { name: 'Sessions for Knee cut pass' })).not.toBeInTheDocument();
+    // A technique with no sessions has no history to open.
+    expect(screen.queryByRole('button', { name: 'Sessions for Triangle' })).not.toBeInTheDocument();
+  });
+
   it('shows what is being worked on and what has gone stale on the overview', () => {
     const today = todayIso();
     seed({
       techniques: [
-        { ...KNEE_CUT, addedOn: addDays(today, -90) },
-        { ...TRIANGLE, addedOn: addDays(today, -90) },
-        { id: 't3', name: 'Armbar', position: 'guard', status: 'learning', addedOn: addDays(today, -90) },
+        { ...KNEE_CUT, addedOn: addDays(today, -90), statusSince: addDays(today, -90) },
+        { ...TRIANGLE, addedOn: addDays(today, -90), statusSince: addDays(today, -90) },
+        { id: 't3', name: 'Armbar', position: 'guard', status: 'learning', addedOn: addDays(today, -90), statusSince: addDays(today, -90) },
       ],
       sessions: [
         { id: 's1', date: addDays(today, -2), durationMinutes: 60, type: 'gi', techniqueIds: ['t1'] },
@@ -763,7 +833,7 @@ describe('Backup and restore', () => {
       },
     ],
     techniques: [
-      { id: 't1', name: 'Armbar', position: 'guard', status: 'drilling', addedOn: '2025-02-10' },
+      { id: 't1', name: 'Armbar', position: 'guard', status: 'drilling', addedOn: '2025-02-10', statusSince: '2025-02-10' },
     ],
   };
 

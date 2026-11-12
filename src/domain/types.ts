@@ -55,6 +55,8 @@ export interface Technique {
   notes?: string;
   /** The day it was added to the journal. */
   addedOn: string;
+  /** The day it reached its current stage. */
+  statusSince: string;
 }
 
 export const MATCH_RESULTS = ['win', 'loss', 'draw'] as const;
