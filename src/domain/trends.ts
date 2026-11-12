@@ -143,3 +143,19 @@ export function weeklyAverage(
 export function axisMax(values: number[]): number {
   return Math.max(2, Math.ceil(Math.max(0, ...values) / 2) * 2);
 }
+
+/** What the weekly chart can show. */
+export const TREND_METRICS = ['sessions', 'hours', 'rounds'] as const;
+export type TrendMetric = (typeof TREND_METRICS)[number];
+
+export const METRIC_LABELS: Record<TrendMetric, string> = {
+  sessions: 'Sessions',
+  hours: 'Hours',
+  rounds: 'Rounds',
+};
+
+/** A week's figure for the chart. Hours are to one decimal place, as they are shown elsewhere. */
+export function metricValue(week: WeekTotal, metric: TrendMetric): number {
+  if (metric === 'hours') return Math.round(week.minutes / 6) / 10;
+  return metric === 'rounds' ? week.rounds : week.sessions;
+}

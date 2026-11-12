@@ -1161,6 +1161,64 @@ describe('Time off', () => {
   });
 });
 
+describe('The weekly chart', () => {
+  it('switches between sessions, hours and rounds', async () => {
+    const thisWeek = weekStart(todayIso());
+    seed({
+      weeklyGoal: 3,
+      sessions: [
+        { id: 's1', date: thisWeek, durationMinutes: 90, type: 'gi', rounds: 5 },
+        { id: 's2', date: addDays(thisWeek, -7), durationMinutes: 60, type: 'gi', rounds: 4 },
+        { id: 's3', date: addDays(thisWeek, -6), durationMinutes: 75, type: 'gi' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const chart = screen.getByRole('group', { name: 'Sessions per week, last 8 weeks' });
+    const shows = within(chart).getByRole('group', { name: 'Chart shows' });
+    expect(within(shows).getByRole('button', { name: 'Sessions' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(chart).toHaveTextContent('The dashed line is your goal of 3 a week.');
+    // Each bar says everything the week holds, whichever figure it is drawn from.
+    expect(within(chart).getAllByRole('img')[6]).toHaveAccessibleName(
+      `Week of ${formatShortDate(addDays(thisWeek, -7))}: 2 sessions, 2.3 hours, 4 rounds`,
+    );
+
+    await user.click(within(shows).getByRole('button', { name: 'Hours' }));
+    const hours = screen.getByRole('group', { name: 'Hours per week, last 8 weeks' });
+    expect(hours).toHaveTextContent('Hours per week');
+    // The goal is in sessions, so its line is not drawn against hours.
+    expect(hours).not.toHaveTextContent('dashed line');
+    // The week in progress is labelled with its figure.
+    expect(hours).toHaveTextContent('1.5');
+
+    await user.click(within(shows).getByRole('button', { name: 'Rounds' }));
+    const rounds = screen.getByRole('group', { name: 'Rounds per week, last 8 weeks' });
+    expect(rounds).toHaveTextContent('Rounds count only the sessions that record them.');
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    expect(rows[0]).toHaveTextContent('Week startingSessionsHoursRounds');
+    expect(rows[7]).toHaveTextContent(`${formatShortDate(addDays(thisWeek, -7))}22.34`);
+  });
+
+  it('says the goal is not counted in a week with time off', () => {
+    const today = todayIso();
+    seed({
+      weeklyGoal: 3,
+      sessions: [{ id: 's1', date: addDays(today, -30), durationMinutes: 60, type: 'gi' }],
+      timeOff: [{ id: 'o1', startDate: addDays(today, -3), reason: 'injury' }],
+    });
+    render(<App />);
+    const tile = screen.getByRole('group', { name: 'This week' });
+    expect(tile).toHaveTextContent('Time off this week, so your goal of 3 is not counted');
+    expect(tile).not.toHaveTextContent('to go');
+  });
+});
+
 describe('Time off that is planned, or was never ended', () => {
   it('holds the streak for time off later this week without saying you are off today', async () => {
     const today = todayIso();
@@ -1328,9 +1386,9 @@ describe('Stale techniques and time off', () => {
     });
     render(<App />);
     expect(card()).toHaveTextContent('StaleTriangle (70 days, not counting 20 days off)');
-    // Armbar is no longer stale, so it is back among what was trained lately.
-    expect(card()).toHaveTextContent(`RecentArmbar (${formatShortDate(addDays(today, -40))})`);
-    expect(card()).not.toHaveTextContent('Armbar (40 days');
+    // Armbar is no longer stale, and was not trained in the last 30 days, so it is in neither row.
+    expect(card()).not.toHaveTextContent('Recent');
+    expect(card()).not.toHaveTextContent('Armbar');
     expect(card()).toHaveTextContent(
       'Stale means not trained for 30 days or more, not counting time off.',
     );

@@ -350,7 +350,10 @@ export function formatUntrained({ days, daysOff }: Untrained): string {
 
 export interface TechniqueFocus {
   counts: StatusCounts;
-  /** Being worked on and trained in the last 30 days, most recently trained first. */
+  /**
+   * Being worked on and trained in the last 30 days, most recently trained first. A technique
+   * that only time off is keeping from going stale is in neither list.
+   */
   recent: { technique: Technique; lastTrained: string }[];
   /** Being worked on and not trained for 30 days, leaving out time off; longest wait first. */
   stale: ({ technique: Technique } & Untrained)[];
@@ -369,7 +372,7 @@ export function techniqueFocus(
     const own = activityOf(activity, technique);
     if (isStale(technique, own, today, timeOff)) {
       stale.push({ technique, ...untrained(technique, own, today, timeOff) });
-    } else if (own.lastTrained !== null) {
+    } else if (own.lastTrained !== null && daysBetween(own.lastTrained, today) < STALE_DAYS) {
       recent.push({ technique, lastTrained: own.lastTrained });
     }
   }

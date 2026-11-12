@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, formatShortDate, weekStart } from './dates';
-import { axisMax, finishedWeeks, weeklyAverage, weeklyStreak, weeklyTotals } from './trends';
+import {
+  axisMax,
+  finishedWeeks,
+  metricValue,
+  weeklyAverage,
+  weeklyStreak,
+  weeklyTotals,
+} from './trends';
 import type { Session, TimeOff } from './types';
 
 // Wednesday. Its week starts on Monday 9 Nov 2026.
@@ -203,5 +210,18 @@ describe('time off in the trends', () => {
     ]);
     expect(weeklyAverage(sessions, TODAY)).toEqual({ sessions: 5 / 4, weeks: 4 });
     expect(weeklyAverage(sessions, TODAY, 8, timeOff)).toEqual({ sessions: 2, weeks: 2 });
+  });
+});
+
+describe('metricValue', () => {
+  it('gives a week in sessions, hours to one decimal place, or rounds', () => {
+    const sessions: Session[] = [
+      { ...session('2026-11-09', 100), rounds: 5 },
+      { ...session('2026-11-10', 35) },
+    ];
+    const [week] = weeklyTotals(sessions, TODAY, 1);
+    expect(metricValue(week, 'sessions')).toBe(2);
+    expect(metricValue(week, 'hours')).toBe(2.3);
+    expect(metricValue(week, 'rounds')).toBe(5);
   });
 });

@@ -1,7 +1,8 @@
-import { formatDate, formatShortDate } from '../domain/dates';
+import { formatDate, formatShortDate, weekStart } from '../domain/dates';
 import { goalProgress } from '../domain/goals';
 import { formatRank } from '../domain/rank';
 import { formatHours, matTimeStats } from '../domain/sessions';
+import { isWeekOff } from '../domain/timeOff';
 import { weeklyTotals } from '../domain/trends';
 import type { AppData } from '../domain/types';
 
@@ -45,6 +46,10 @@ function Tile({ label, total, detail }: TileProps) {
 function goalDetail(data: AppData, today: string): string {
   if (data.weeklyGoal === null) return '';
   const progress = goalProgress(data.sessions, data.weeklyGoal, today);
+  // A week with time off is left out of the goal record, so nothing is owed in it.
+  if (!progress.met && isWeekOff(data.timeOff, weekStart(today), today)) {
+    return ` · Time off this week, so your goal of ${progress.goal} is not counted`;
+  }
   return progress.met
     ? ` · Weekly goal of ${progress.goal} reached`
     : ` · ${progress.remaining} to go for your goal of ${progress.goal}`;

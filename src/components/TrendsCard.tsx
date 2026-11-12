@@ -1,13 +1,18 @@
+import { useState } from 'react';
 import { formatShortDate } from '../domain/dates';
 import { goalProgress, goalRecord, MAX_WEEKLY_GOAL } from '../domain/goals';
 import { formatHours } from '../domain/sessions';
 import { currentTimeOff } from '../domain/timeOff';
 import {
   axisMax,
+  METRIC_LABELS,
+  metricValue,
+  TREND_METRICS,
   TREND_WEEKS,
   weeklyAverage,
   weeklyStreak,
   weeklyTotals,
+  type TrendMetric,
   type WeeklyStreak,
   type WeekTotal,
 } from '../domain/trends';
@@ -35,8 +40,10 @@ function weekName(week: WeekTotal): string {
   return week.off ? `${name}, time off` : name;
 }
 
+/** Everything a week holds, whichever figure the bars are drawn from. */
 function weekValue(week: WeekTotal): string {
-  return `${count(week.sessions, 'session')}, ${formatHours(week.minutes)} hours`;
+  const rounds = week.rounds > 0 ? `, ${count(week.rounds, 'round')}` : '';
+  return `${count(week.sessions, 'session')}, ${formatHours(week.minutes)} hours${rounds}`;
 }
 
 function GoalPicker({ weeklyGoal, onSetGoal }: Pick<Props, 'weeklyGoal' | 'onSetGoal'>) {
@@ -127,14 +134,18 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
     );
   }
 
+  const [metric, setMetric] = useState<TrendMetric>('sessions');
   const weeks = weeklyTotals(sessions, today, TREND_WEEKS, timeOff);
+  const values = weeks.map((week) => metricValue(week, metric));
+  // The goal is in sessions, so its line belongs only on the sessions chart.
+  const goalLine = metric === 'sessions' ? weeklyGoal : null;
   const streak = weeklyStreak(sessions, today, timeOff);
   const average = weeklyAverage(sessions, today, TREND_WEEKS, timeOff);
   const weeksOff = weeks.filter((week) => week.off).length;
   const offToday = currentTimeOff(timeOff, today) !== null;
   // With no average, tell having no full week yet from having only weeks with time off.
   const onlyWeeksOff = average === null && weeklyAverage(sessions, today) !== null;
-  const max = axisMax([...weeks.map((week) => week.sessions), weeklyGoal ?? 0]);
+  const max = axisMax([...values, goalLine ?? 0]);
   const ticks = [max, max / 2, 0];
 
   return (
@@ -173,9 +184,22 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
       <div
         className="chart"
         role="group"
-        aria-label={`Sessions per week, last ${TREND_WEEKS} weeks`}
+        aria-label={`${METRIC_LABELS[metric]} per week, last ${TREND_WEEKS} weeks`}
       >
-        <p className="chart__title">Sessions per week</p>
+        <p className="chart__title">{METRIC_LABELS[metric]} per week</p>
+        <div className="choices__row" role="group" aria-label="Chart shows">
+          {TREND_METRICS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="chip chip--button"
+              aria-pressed={metric === option}
+              onClick={() => setMetric(option)}
+            >
+              {METRIC_LABELS[option]}
+            </button>
+          ))}
+        </div>
         <div className="chart__body">
           <div className="chart__ticks" aria-hidden="true">
             {ticks.map((tick) => (
@@ -200,14 +224,14 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
                 aria-label={`${weekName(week)}: ${weekValue(week)}`}
               >
                 {/* Only the week in progress is labelled; the axis and tooltips cover the rest. */}
-                {week.current && week.sessions > 0 && (
+                {week.current && values[index] > 0 && (
                   <span className="chart__value" aria-hidden="true">
-                    {week.sessions}
+                    {values[index]}
                   </span>
                 )}
                 <span
                   className="chart__bar"
-                  style={{ height: `${(week.sessions / max) * 100}%` }}
+                  style={{ height: `${(values[index] / max) * 100}%` }}
                 />
                 <span
                   className={`chart__tooltip${index < 2 ? ' chart__tooltip--start' : ''}${
@@ -220,10 +244,10 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
                 </span>
               </div>
             ))}
-            {weeklyGoal !== null && (
+            {goalLine !== null && (
               <span
                 className="chart__goal"
-                style={{ bottom: `${(weeklyGoal / max) * 100}%` }}
+                style={{ bottom: `${(goalLine / max) * 100}%` }}
                 aria-hidden="true"
               />
             )}
@@ -236,7 +260,8 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
         </div>
         <p className="hint">
           Weeks start on Monday. The last bar is this week so far.
-          {weeklyGoal !== null && ` The dashed line is your goal of ${weeklyGoal} a week.`}
+          {goalLine !== null && ` The dashed line is your goal of ${goalLine} a week.`}
+          {metric === 'rounds' && ' Rounds count only the sessions that record them.'}
           {weeksOff > 0 &&
             ` Shaded weeks include time off and are left out of your average${
               weeklyGoal !== null ? ' and goal record' : ''
@@ -252,6 +277,7 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
               <th scope="col">Week starting</th>
               <th scope="col">Sessions</th>
               <th scope="col">Hours</th>
+              <th scope="col">Rounds</th>
             </tr>
           </thead>
           <tbody>
@@ -264,6 +290,7 @@ export function TrendsCard({ sessions, timeOff, weeklyGoal, today, onSetGoal }: 
                 </th>
                 <td>{week.sessions}</td>
                 <td>{formatHours(week.minutes)}</td>
+                <td>{week.rounds}</td>
               </tr>
             ))}
           </tbody>

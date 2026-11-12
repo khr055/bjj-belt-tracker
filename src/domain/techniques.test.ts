@@ -491,7 +491,7 @@ describe('going stale around time off', () => {
     const timeOff = [off('2026-10-14', '2026-11-10')];
     const focus = techniqueFocus({ techniques, sessions, timeOff }, TODAY);
     expect(focus.stale).toEqual([{ technique: techniques[1], days: 74, daysOff: 28 }]);
-    // Not stale, and trained more than 30 days ago all the same: it is still listed as recent.
-    expect(focus.recent.map((entry) => entry.technique.name)).toEqual(['Held']);
+    // Held back from stale by the time off, but not trained in the last 30 days: in neither list.
+    expect(focus.recent).toEqual([]);
   });
 });
