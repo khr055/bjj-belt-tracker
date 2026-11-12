@@ -1011,6 +1011,35 @@ describe('Wins by a technique from the journal', () => {
     });
   });
 
+  it('keeps the link when a linked win is changed to a loss and back', async () => {
+    seed({
+      techniques: [TRIANGLE],
+      competitions: [
+        { ...OPEN, matches: [{ id: 'm1', result: 'win', method: 'submission', techniqueId: 't1' }] },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Compete' }));
+    await user.click(screen.getByRole('button', { name: 'Edit match 1 at Autumn Open' }));
+    const form = screen.getByRole('form', { name: 'Edit match' });
+    await user.click(within(form).getByRole('radio', { name: 'Loss' }));
+    await user.click(within(form).getByRole('radio', { name: 'Win' }));
+    expect(within(form).getByRole('combobox')).toHaveValue('t1');
+    expect(within(form).queryByRole('textbox', { name: /Submission/ })).not.toBeInTheDocument();
+    // Choosing to type it in after all starts from an empty box, not the name filled in for the loss.
+    await user.selectOptions(within(form).getByRole('combobox'), 'Not in my journal');
+    expect(within(form).getByRole('textbox', { name: /Submission/ })).toHaveValue('');
+    await user.selectOptions(within(form).getByRole('combobox'), 'Triangle');
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }));
+    expect(stored().competitions[0].matches[0]).toEqual({
+      id: 'm1',
+      result: 'win',
+      method: 'submission',
+      techniqueId: 't1',
+    });
+  });
+
   it('types the submission in when the journal is empty', async () => {
     seed({ competitions: [{ ...OPEN, matches: [] }] });
     const user = userEvent.setup();
@@ -1181,7 +1210,16 @@ describe('Time off that is planned, or was never ended', () => {
       `has no last day, but you trained on ${formatDate(addDays(today, -20))}`,
     );
     const lastDay = addDays(today, -21);
-    await user.click(within(card).getByRole('button', { name: `End it on ${formatDate(lastDay)}` }));
+    // The offer still applies with the edit form open, and ending it there closes the form, so its
+    // blank last day cannot be saved back over the new one.
+    const from = formatDate(addDays(today, -90));
+    await user.click(within(card).getByRole('button', { name: `Edit time off from ${from}` }));
+    await user.click(
+      within(card).getByRole('button', {
+        name: `End time off from ${from} on ${formatDate(lastDay)}`,
+      }),
+    );
+    expect(within(card).queryByRole('form', { name: 'Edit time off' })).not.toBeInTheDocument();
 
     expect(stored().timeOff).toEqual([
       { id: 'o1', startDate: addDays(today, -90), endDate: lastDay, reason: 'injury', notes: 'Knee' },
@@ -1189,6 +1227,59 @@ describe('Time off that is planned, or was never ended', () => {
     expect(card).not.toHaveTextContent('has no last day');
     expect(card).toHaveTextContent(`${formatDate(addDays(today, -90))} to ${formatDate(lastDay)}`);
     expect(average).toHaveTextContent(/Over the last \d full weeks?/);
+  });
+});
+
+describe('Time off: planned periods and older ones never ended', () => {
+  it('marks every period that has yet to start as planned, with or without a last day', async () => {
+    const today = todayIso();
+    seed({
+      timeOff: [
+        { id: 'o1', startDate: addDays(today, 20), endDate: addDays(today, 30), reason: 'travel' },
+        { id: 'o2', startDate: addDays(today, 40), endDate: addDays(today, 40), reason: 'other' },
+        { id: 'o3', startDate: addDays(today, -30), endDate: addDays(today, -20), reason: 'illness' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+    const [single, trip, past] = within(screen.getByRole('list', { name: 'Time off' })).getAllByRole(
+      'listitem',
+    );
+    expect(single).toHaveTextContent('Planned');
+    expect(trip).toHaveTextContent('Planned');
+    expect(past).not.toHaveTextContent('Planned');
+    expect(past).not.toHaveTextContent('Ongoing');
+  });
+
+  it('offers to end an older open period even while a newer one covers today', async () => {
+    const today = todayIso();
+    seed({
+      sessions: [{ id: 's1', date: addDays(today, -40), durationMinutes: 60, type: 'gi' }],
+      timeOff: [
+        { id: 'old', startDate: addDays(today, -60), reason: 'injury' },
+        { id: 'new', startDate: addDays(today, -2), reason: 'illness' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Training' }));
+
+    const card = screen.getByRole('region', { name: 'Time off' });
+    // The newer one has not been trained since, so it is simply time off.
+    expect(card).toHaveTextContent('You are on time off (illness)');
+    expect(card).toHaveTextContent(
+      `Your time off since ${formatDate(addDays(today, -60))} has no last day`,
+    );
+    await user.click(
+      within(card).getByRole('button', {
+        name: `End time off from ${formatDate(addDays(today, -60))} on ${formatDate(addDays(today, -41))}`,
+      }),
+    );
+    expect(stored().timeOff[0]).toMatchObject({ id: 'old', endDate: addDays(today, -41) });
+    expect(stored().timeOff[1]).not.toHaveProperty('endDate');
+    expect(card).not.toHaveTextContent('has no last day');
+    expect(card).toHaveTextContent('You are on time off (illness)');
   });
 });
 

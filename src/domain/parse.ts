@@ -129,7 +129,8 @@ function toTimeOff(value: unknown): TimeOff | null {
   if (!TIME_OFF_REASONS.includes(value.reason as TimeOffReason)) return null;
   // A last day that cannot be right spoils the record: reading it as still going on would turn
   // a period that ended into one that never does.
-  const endDate = value.endDate ?? undefined;
+  // A blank one is no last day, as it is in the form.
+  const endDate = value.endDate === '' ? undefined : (value.endDate ?? undefined);
   if (endDate !== undefined && !(isIsoDate(endDate) && endDate >= value.startDate)) return null;
   const notes = optionalText(value.notes, MAX_NOTES_LENGTH);
   return {

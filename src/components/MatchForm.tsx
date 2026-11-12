@@ -38,15 +38,15 @@ export function MatchForm({ initial, label, techniques, onSubmit, onCancel, onDe
   const [method, setMethod] = useState<MatchMethod | null>(initial?.method ?? null);
   const [submission, setSubmission] = useState(initial?.submission ?? '');
   const [techniqueId, setTechniqueId] = useState(initial?.techniqueId ?? '');
-  // A linked win changed to a loss cannot keep its link, so the technique's name is kept as
-  // words, where it can be seen and changed before saving.
+  // A loss cannot be linked to the journal, so a linked win changed to a loss shows the
+  // technique's name as words, where it can be seen and changed before saving. The link itself
+  // is kept in the form, so changing the result back restores it.
   const chooseResult = (next: MatchResult) => {
     setResult(next);
     const name = techniques.find((technique) => technique.id === techniqueId)?.name;
-    if (next === 'loss' && name) {
-      setSubmission(name);
-      setTechniqueId('');
-    }
+    if (!name) return;
+    if (next === 'loss' && submission === '') setSubmission(name);
+    if (next !== 'loss' && submission === name) setSubmission('');
   };
   const linkable =
     techniques.length > 0 && result !== null && canLinkTechnique({ result, method: method ?? undefined });

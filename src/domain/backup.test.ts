@@ -247,6 +247,9 @@ describe('backup files', () => {
         { id: 'o3', startDate: '2026-09-12', endDate: 5, reason: 'travel' },
         { id: 'o4', startDate: '2026-09-20', reason: 'holiday' },
         { id: 'o5', startDate: '2026-10-20', reason: 'illness' },
+        // A blank or null last day is no last day.
+        { id: 'o6', startDate: '2026-10-21', endDate: '', reason: 'other' },
+        { id: 'o7', startDate: '2026-10-22', endDate: null, reason: 'other' },
       ],
     };
     const result = readBackup(file({ version: 6, data }), TODAY);
@@ -260,6 +263,8 @@ describe('backup files', () => {
     expect(result.value.data.timeOff).toEqual([
       { id: 'o1', startDate: '2026-08-03', endDate: '2026-08-16', reason: 'injury' },
       { id: 'o5', startDate: '2026-10-20', reason: 'illness' },
+      { id: 'o6', startDate: '2026-10-21', reason: 'other' },
+      { id: 'o7', startDate: '2026-10-22', reason: 'other' },
     ]);
     expect(result.value.skipped).toBe(3);
   });

@@ -136,7 +136,14 @@ function TimeOffForm({ initial, today, onSubmit, onCancel }: FormProps) {
 export function TimeOffCard({ timeOff, sessions, today, onAdd, onUpdate, onDelete }: Props) {
   const [mode, setMode] = useState<Mode>(IDLE);
   const current = currentTimeOff(timeOff, today);
-  const back = current ? returnedOn(current, sessions) : null;
+  // Every period with no last day that has been trained since, oldest first: an old one that was
+  // forgotten matters as much as the one covering today.
+  const overtaken = sortTimeOff(timeOff)
+    .reverse()
+    .flatMap((period) => {
+      const back = returnedOn(period, sessions, today);
+      return back ? [{ period, back }] : [];
+    });
 
   const closeOnSuccess = (problem: string | null) => {
     if (!problem) setMode(IDLE);
@@ -166,33 +173,36 @@ export function TimeOffCard({ timeOff, sessions, today, onAdd, onUpdate, onDelet
         />
       )}
 
-      {current && back === null && (
+      {current && !overtaken.some(({ period }) => period.id === current.id) && (
         <p className="notice">
           You are on time off ({REASON_LABELS[current.reason].toLowerCase()}). This week doesn't
           count against your streak or goal.
         </p>
       )}
 
-      {current && back !== null && (
-        <div className="notice">
+      {overtaken.map(({ period, back }) => (
+        <div key={period.id} className="notice">
           <p>
-            Your time off since {formatDate(current.startDate)} has no last day, but you trained on{' '}
+            Your time off since {formatDate(period.startDate)} has no last day, but you trained on{' '}
             {formatDate(back.firstSession)}. Until it is ended, every week counts as time off.
           </p>
           <div className="actions">
             <button
               type="button"
               className="button button--small"
+              aria-label={`End time off from ${formatDate(period.startDate)} on ${formatDate(back.lastDayOff)}`}
               onClick={() => {
-                const { id: _id, ...period } = current;
-                onUpdate(current.id, { ...period, endDate: back.lastDayOff });
+                const { id, ...rest } = period;
+                onUpdate(id, { ...rest, endDate: back.lastDayOff });
+                // An edit form left open would save its own, older, blank last day over this.
+                setMode(IDLE);
               }}
             >
               End it on {formatDate(back.lastDayOff)}
             </button>
           </div>
         </div>
-      )}
+      ))}
 
       {timeOff.length === 0 && mode.kind !== 'add' && (
         <p className="muted">
@@ -224,10 +234,10 @@ export function TimeOffCard({ timeOff, sessions, today, onAdd, onUpdate, onDelet
                     <strong>{describeDates(period, today)}</strong>
                     <span className="muted">{REASON_LABELS[period.reason]}</span>
                   </div>
-                  {period.endDate === undefined && (
-                    <span className="list__value">
-                      {period.startDate > today ? 'Planned' : 'Ongoing'}
-                    </span>
+                  {period.startDate > today ? (
+                    <span className="list__value">Planned</span>
+                  ) : (
+                    period.endDate === undefined && <span className="list__value">Ongoing</span>
                   )}
                 </div>
                 {period.notes && <p className="list__detail list__notes">{period.notes}</p>}
