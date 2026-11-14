@@ -5,9 +5,12 @@ import {
   loadBackupSnooze,
   loadData,
   loadLastBackup,
+  loadLetIn,
+  LET_IN_KEY,
   saveBackupSnooze,
   saveData,
   saveLastBackup,
+  saveLetIn,
   STORAGE_KEY,
 } from './storage';
 
@@ -204,5 +207,17 @@ describe('storage', () => {
     saveBackupSnooze('2026-11-10');
     expect(loadBackupSnooze()).toBe('2026-11-10');
     expect(loadLastBackup()).toBeNull();
+  });
+
+  it('remembers that the question on the first screen was answered', () => {
+    window.localStorage.removeItem(LET_IN_KEY);
+    expect(loadLetIn()).toBe(false);
+    saveLetIn();
+    expect(loadLetIn()).toBe(true);
+  });
+
+  it('does not let in on a stored value it did not write', () => {
+    window.localStorage.setItem(LET_IN_KEY, 'true');
+    expect(loadLetIn()).toBe(false);
   });
 });

@@ -8,6 +8,7 @@ import { CheckInCard } from './components/CheckInCard';
 import { CompetitionRecordCard } from './components/CompetitionRecordCard';
 import { CompetitionsView } from './components/CompetitionsView';
 import { MatTimeStats } from './components/MatTimeStats';
+import { NameGate } from './components/NameGate';
 import { NextCompetitionCard } from './components/NextCompetitionCard';
 import { RankCard } from './components/RankCard';
 import { SessionForm } from './components/SessionForm';
@@ -29,6 +30,7 @@ import { sampleAcademy } from './domain/sampleAcademy';
 import { caughtTally, sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
 import { TrendsCard } from './components/TrendsCard';
+import { loadLetIn, saveLetIn } from './state/storage';
 import { useAppState } from './state/useAppState';
 import { useRankIcons } from './state/useRankIcons';
 
@@ -48,7 +50,23 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
+/** Asks who is there before showing anything, once per device. */
 export default function App() {
+  const [letIn, setLetIn] = useState(loadLetIn);
+  if (!letIn) {
+    return (
+      <NameGate
+        onLetIn={() => {
+          saveLetIn();
+          setLetIn(true);
+        }}
+      />
+    );
+  }
+  return <Tracker />;
+}
+
+function Tracker() {
   const { data, saveFailed, actions } = useAppState();
   useRankIcons(data.rank);
   const [tab, setTab] = useState<TabId>('overview');

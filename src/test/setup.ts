@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { LET_IN_KEY } from '../state/storage';
 
 /** A plain in-memory stand-in for the browser's localStorage. */
 class MemoryStorage implements Storage {
@@ -48,6 +49,12 @@ if (hasPage) {
     });
   }
 }
+
+// Tests start past the question on the first screen, as a returning visitor would. The tests of
+// that screen take this away again.
+beforeEach(() => {
+  if (hasPage) window.localStorage.setItem(LET_IN_KEY, 'yes');
+});
 
 afterEach(() => {
   if (!hasPage) return;

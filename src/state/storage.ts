@@ -5,6 +5,7 @@ import { emptyData, type AppData } from '../domain/types';
 export const STORAGE_KEY = 'bjj-belt-tracker:v1';
 export const LAST_BACKUP_KEY = 'bjj-belt-tracker:last-backup';
 export const BACKUP_SNOOZE_KEY = 'bjj-belt-tracker:backup-snooze';
+export const LET_IN_KEY = 'bjj-belt-tracker:let-in';
 
 export function loadData(): AppData {
   try {
@@ -58,4 +59,21 @@ export function loadBackupSnooze(): string | null {
 
 export function saveBackupSnooze(date: string): void {
   saveDate(BACKUP_SNOOZE_KEY, date);
+}
+
+/** Whether the question on the first screen has been answered correctly on this device. */
+export function loadLetIn(): boolean {
+  try {
+    return window.localStorage.getItem(LET_IN_KEY) === 'yes';
+  } catch {
+    return false;
+  }
+}
+
+export function saveLetIn(): void {
+  try {
+    window.localStorage.setItem(LET_IN_KEY, 'yes');
+  } catch {
+    // The visitor is still let in for this visit; they are only asked again next time.
+  }
 }
