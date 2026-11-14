@@ -7,6 +7,8 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
 
 ## Features
 
+- Asks "What is your name?" before showing anything, and opens only for the expected answer.
+  A device is asked once.
 - Switch between the Student view (your own record, everything below) and a preview of the Coach
   view, which shows a sample academy: who has met their minimum time, who has gone quiet, each
   student's rank and attendance, and recording promotions.
@@ -55,6 +57,16 @@ Data is stored in the browser's `localStorage`. There is no backend and no accou
   recently each one has landed.
 - See what you are working on from the Overview tab, including techniques that have gone stale:
   still being learned or drilled, and not trained for 30 days, not counting time off.
+
+## The name question
+
+The first screen asks for a name and shows nothing of the app until the expected one is given.
+Capitals and extra spaces don't matter. A wrong answer says only that the site is private. A
+device that has answered correctly is not asked again, unless its browser data is cleared.
+
+This keeps out someone who finds the site by accident. It is not a lock: the app, with the
+answer inside it, is downloaded by every visitor's browser, so someone who goes looking can get
+past it. Keeping people out for certain needs sign-in checked by a server.
 
 ## Backups
 

@@ -6,7 +6,7 @@ import { createBackupText, readBackup } from './domain/backup';
 import { addDays, formatDate, formatShortDate, todayIso, weekStart } from './domain/dates';
 import { emptyData, type AppData, type Session, type Technique } from './domain/types';
 import { downloadTextFile } from './state/files';
-import { BACKUP_SNOOZE_KEY, LAST_BACKUP_KEY, STORAGE_KEY } from './state/storage';
+import { BACKUP_SNOOZE_KEY, LAST_BACKUP_KEY, LET_IN_KEY, STORAGE_KEY } from './state/storage';
 
 // jsdom has no downloads or share sheet; capture what would have been saved instead.
 vi.mock('./state/files', async (importOriginal) => ({
@@ -24,6 +24,36 @@ function stored(): AppData {
 }
 
 describe('App', () => {
+  it('asks for a name first and shows nothing else until the answer is right', async () => {
+    window.localStorage.removeItem(LET_IN_KEY);
+    seed({ rank: { belt: 'blue', stripes: 2 }, promotions: [], sessions: [] });
+    const user = userEvent.setup();
+    const first = render(<App />);
+
+    const form = screen.getByRole('form', { name: 'Who are you?' });
+    expect(screen.queryByRole('heading', { name: 'BJJ Belt Tracker' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Blue belt/)).not.toBeInTheDocument();
+
+    await user.type(within(form).getByLabelText('What is your name?'), 'Professor Silva');
+    await user.click(within(form).getByRole('button', { name: 'Enter' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Sorry, this site is private.');
+    expect(screen.queryByText(/Blue belt/)).not.toBeInTheDocument();
+
+    await user.clear(within(form).getByLabelText('What is your name?'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.type(within(form).getByLabelText('What is your name?'), 'professor moana{Enter}');
+    expect(screen.getByRole('heading', { name: 'BJJ Belt Tracker' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Blue belt, 2 stripes' })).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Who are you?' })).not.toBeInTheDocument();
+
+    // The question is asked once on a device, not on every visit.
+    first.unmount();
+    render(<App />);
+    expect(screen.getByRole('heading', { name: 'Blue belt, 2 stripes' })).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Who are you?' })).not.toBeInTheDocument();
+  });
+
   it('sets the current rank, keeps it across reloads and lets it be edited', async () => {
     const user = userEvent.setup();
     const first = render(<App />);
