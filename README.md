@@ -249,11 +249,29 @@ reason for time off.
 In the Student view you can still set your own rank and log your own promotions. Once the app is
 on the database, only coaches and owners will be able to.
 
+## Signing in (in progress)
+
+The "Sign in" button at the top opens the account screen. People sign in with Google, or with a
+link emailed to them; there are no passwords. Once signed in they can join an academy with the
+code a coach gives them, or start one, which makes them its owner and gives them a code to hand
+out. The screen shows the rank on record (awarded by a coach), the academies they belong to and
+their role in each, and lets them change the name their coaches see, leave an academy, and sign
+out.
+
+Signing in is optional for now and changes nothing else: the training record is still stored on
+the device, and the Coach view still shows the sample academy. Moving each person's record into
+the database, and showing coaches their real members, are the next steps.
+
+The project's address and its public key are in `.env.production` and `.env.development`. They
+are public by design. A build without them, and the test suite, has no "Sign in" button and
+works on the device alone.
+
 ## Database (in progress)
 
 The app is moving from storing everything in the browser to a shared database for a whole
-academy, on Supabase. The database design is in `supabase/migrations/`; the app does not use it
-yet, and still stores its data in the browser.
+academy, on Supabase. The database design is in `supabase/migrations/` and has been applied to
+the project. The app uses it for signing in and for academies; training records are still stored
+in the browser.
 
 Who can do what:
 

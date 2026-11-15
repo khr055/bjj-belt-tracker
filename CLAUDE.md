@@ -1,8 +1,10 @@
 # bjj-belt-tracker
 
 A mobile-first React + TypeScript PWA for tracking one person's Brazilian jiu-jitsu progress.
-Data lives in the browser's `localStorage`; there is no backend and no account. `README.md`
-describes every feature and the rules behind it, and is kept current with the code.
+Training records live in the browser's `localStorage`. Signing in and academies use a Supabase
+project (`src/state/supabase.ts`, `account.ts`, `useAccount.ts`); the tests run with no database,
+so anything that talks to it takes the client as a parameter and is tested with a stand-in.
+`README.md` describes every feature and the rules behind it, and is kept current with the code.
 
 ## Commands
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AcademyView } from './components/AcademyView';
+import { AccountView } from './components/AccountView';
 import { BackupReminder } from './components/BackupReminder';
 import { BackupView } from './components/BackupView';
 import { CalendarCard } from './components/CalendarCard';
@@ -31,6 +32,7 @@ import { caughtTally, sessionDefaults } from './domain/sessions';
 import { buildTimeline } from './domain/timeline';
 import { TrendsCard } from './components/TrendsCard';
 import { loadLetIn, saveLetIn } from './state/storage';
+import { useAccount } from './state/useAccount';
 import { useAppState } from './state/useAppState';
 import { useRankIcons } from './state/useRankIcons';
 
@@ -38,7 +40,8 @@ const VIEWS = [
   { id: 'student', label: 'Student' },
   { id: 'coach', label: 'Coach' },
 ] as const;
-type View = (typeof VIEWS)[number]['id'];
+/** The two sides of the academy, and the screen for signing in where that is set up. */
+type View = (typeof VIEWS)[number]['id'] | 'account';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -68,6 +71,7 @@ export default function App() {
 
 function Tracker() {
   const { data, saveFailed, actions } = useAppState();
+  const account = useAccount();
   useRankIcons(data.rank);
   const [tab, setTab] = useState<TabId>('overview');
   const today = todayIso();
@@ -123,8 +127,24 @@ function Tracker() {
               {label}
             </button>
           ))}
+          {account.state.status !== 'off' && (
+            <button
+              type="button"
+              className="chip chip--button"
+              aria-pressed={view === 'account'}
+              onClick={() => setView('account')}
+            >
+              {account.state.status === 'signed-in' ? 'Account' : 'Sign in'}
+            </button>
+          )}
         </div>
       </header>
+
+      {view === 'account' && (
+        <main className="app__main">
+          <AccountView state={account.state} actions={account.actions} />
+        </main>
+      )}
 
       {view === 'coach' && (
         <main className="app__main">

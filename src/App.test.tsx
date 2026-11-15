@@ -2112,6 +2112,8 @@ describe('Coach view', () => {
 
   it('switches between the student\'s own record and the academy', async () => {
     const user = await asCoach();
+    // No database is set up in the tests, so there is nothing to sign in to and no button for it.
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Riverside Jiu-Jitsu' })).toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('Preview with a sample academy.');
     // The student's sections are not part of the coach's view.
